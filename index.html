@@ -7,6 +7,12 @@
     <meta property="og:title" content="위키 투게더">
     <meta name="description" content="링크로 함께 편집하는 캐릭터 위키 에디터">
     <meta property="og:description" content="링크로 함께 편집하는 캐릭터 위키 에디터">
+    <meta property="og:site_name" content="위키 투게더">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="위키 투게더">
+    <meta name="application-name" content="위키 투게더">
+    <meta name="apple-mobile-web-app-title" content="위키 투게더">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -419,7 +425,7 @@
             <div class="cb-link"><input id="cbLink" readonly><button type="button" onclick="copyCollabLink()">복사</button></div>
             <label class="cb-lbl">참여자</label>
             <div id="cbPeers" class="cb-peers"></div>
-            <small>방장이 방을 닫거나 나가면 모두의 함께 편집이 끝나고, 각자 화면에 문서가 남습니다. 함께 편집 중 뒤로가기(Ctrl+Z)는 내가 고친 칸만 되돌립니다(그 뒤 다른 사람이 같은 칸을 고쳤으면 되돌리지 않음).</small>
+            <small>방장이 방을 닫거나 나가면 모두의 함께 편집이 끝나고, 각자 화면에 문서가 남습니다. 함께 편집 중 뒤로가기(Ctrl+Z)는 내가 고친 칸만 되돌립니다.</small>
         </div>
         <div id="cbStatus" class="cb-status"></div>
         <div class="modal-btns"><button class="btn-secondary" onclick="closeModal()">닫기</button><button class="btn-primary" id="cbMain" onclick="collabMain()">방 만들기</button></div>
@@ -2909,7 +2915,8 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                         else if(m.t==='full'){
                             collab.locks=m.locks||{};if(m.peers) collab.peers=m.peers;
                             cbApply(m.order,m.units||{});collab.undo=[];collab.redo=[];updUndoBtns();cbUpdateUI();
-                            toast('방장의 문서로 다시 맞췄습니다');
+                            if(collab.checkAfterSync){collab.checkAfterSync=false;setTimeout(()=>{const f=checkDoc();cbScheduleSync();reportCheck(f);},50);}
+                            else toast('방장의 문서로 다시 맞췄습니다');
                         }
                         else if(m.t==='peers'){collab.peers=m.peers||{};cbUpdateUI();cbRenderLocks();}
                         else if(m.t==='bye') cbEnd('방장이 방을 닫아 함께 편집이 끝났습니다. 문서는 지금 화면에 그대로 남아 있습니다.');
@@ -2923,9 +2930,11 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
             }catch(e){cbEnd();openModal('collabM');cbUpdateUI();$('cbStatus').textContent=e.message||String(e);}
         }
         function cbLink(){return location.href.split('#')[0]+'#join='+collab.room+'&k='+collab.key;}
+        // 링크 복사: 받는 사람에게 '위키 투게더'로 보이도록 제목 줄과 함께
         function copyCollabLink(){
-            const v=$('cbLink').value;
-            (navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).then(()=>toast('링크를 복사했습니다'),()=>{$('cbLink').select();document.execCommand('copy');toast('링크를 복사했습니다');});
+            const v='[위키 투게더] 함께 편집 초대\n'+$('cbLink').value;
+            const fallback=()=>{const ta=document.createElement('textarea');ta.value=v;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('링크를 복사했습니다');};
+            (navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).then(()=>toast('링크를 복사했습니다'),fallback);
         }
         function cbUpdateUI(){
             const on=collab.on,btn=$('collabBtn'),n=Object.keys(collab.peers).length;
@@ -2942,6 +2951,91 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
         /* 새로고침: 오류로 화면이 꼬였을 때 되돌리기
            - 함께 편집 중: 방에서 나가지 않고 문서를 다시 맞춤 (참여자 → 방장 문서 받기 / 방장 → 모두에게 내 문서 다시 보냄)
            - 혼자일 때: 지금 내용을 저장한 뒤 페이지를 다시 열고 그대로 불러옴 */
+        /* 문서 점검: 자리를 벗어난 제목(이름)·수정 시각·분류·섹션·각주를 원래 자리로. 고친 내용 목록을 돌려줌 */
+        function checkDoc(){
+            const fixes=[],fix=m=>{if(!fixes.includes(m)) fixes.push(m);};
+            const sec=wiki.querySelector('section');if(!sec) return fixes;
+            const mk=(tag,cls,html)=>{const e=document.createElement(tag);if(cls) e.className=cls;if(html!==undefined) e.innerHTML=html;return e;};
+            // 1) 맨 위 머리: <div> 안에 제목(h2) + 수정 시각
+            let head=sec.firstElementChild;
+            const isHead=e=>e&&e.tagName==='DIV'&&!e.matches('.wk-top,.info,.footnote')&&!(e.previousElementSibling&&e.previousElementSibling.matches('h3.sec'));
+            if(!isHead(head)){head=mk('div');head.style.padding='15px';sec.prepend(head);}
+            const h2s=[...wiki.querySelectorAll('h2')];
+            if(!h2s.length){const h=mk('h2');h.textContent='이름';head.prepend(h);fix('문서 제목(이름)이 없어 다시 만들었습니다');}
+            else{
+                if(h2s[0].parentElement!==head||head.firstElementChild!==h2s[0]){head.prepend(h2s[0]);fix('문서 제목(이름)이 다른 자리에 있어 맨 위로 옮겼습니다');}
+                h2s.slice(1).forEach(h=>{const p=newPara();if(h.textContent.trim()) p.textContent=h.textContent;h.replaceWith(p);fix('제목(이름)이 두 개 있어 나머지는 본문 글로 바꿨습니다');});
+            }
+            const h2=head.querySelector('h2');
+            let date=wiki.querySelector('.wiki-date');
+            if(!date){date=mk('i','wiki-date');date.textContent='최근 수정 시각: ';fix('수정 시각 칸이 없어 다시 만들었습니다');}
+            if(date.parentElement!==head||date.previousElementSibling!==h2){h2.after(date);if(fixes.length===0||!fixes[fixes.length-1].includes('수정 시각')) fix('수정 시각이 다른 자리에 있어 제목 아래로 옮겼습니다');}
+            // 머리 안에 끼어든 다른 내용은 분류 아래 칸으로
+            const strayHead=[...head.childNodes].filter(n=>n!==h2&&n!==date&&!(n.nodeType===3&&!n.textContent.trim()));
+            // 2) 분류 칸 (있을 때만): 머리 바로 다음
+            const cat=[...sec.children].find(e=>e.tagName==='SPAN');
+            if(cat&&head.nextElementSibling!==cat){head.after(cat);fix('분류 칸을 제목 아래로 옮겼습니다');}
+            // 3) 분류 아래 칸 → 상단 표·목차
+            let top=sec.querySelector(':scope > div.wk-top');
+            if(!top){top=mk('div','wk-top','<p contenteditable="true"><br></p>');fix('분류 아래 칸을 다시 만들었습니다');}
+            const afterTop=cat||head;
+            if(afterTop.nextElementSibling!==top){afterTop.after(top);fix('분류 아래 칸을 제자리로 옮겼습니다');}
+            if(strayHead.length){top.append(...strayHead.map(n=>{if(n.nodeType===1&&/^(P|TABLE|UL|BLOCKQUOTE|MARK|DETAILS)$/.test(n.tagName)) return n;const p=newPara();p.append(n);return p;}));fix('제목 칸에 끼어든 내용을 분류 아래 칸으로 옮겼습니다');}
+            const info=sec.querySelector(':scope > div.info');
+            if(info&&top.nextElementSibling!==info){top.after(info);fix('상단 표·목차를 제자리로 옮겼습니다');}
+            // 4) 각주란: 하나만, 맨 끝
+            let fbs=[...sec.querySelectorAll('div.footnote')],box=fbs[0];
+            if(!box){box=mk('div','footnote');fix('각주란이 없어 다시 만들었습니다');}
+            fbs.slice(1).forEach(b=>{box.append(...b.childNodes);b.remove();fix('각주란이 여러 개라 하나로 합쳤습니다');});
+            if(sec.lastElementChild!==box||box.parentElement!==sec){sec.appendChild(box);fix('각주란을 문서 맨 끝으로 옮겼습니다');}
+            // 각주 줄이 본문으로 빠져나간 경우 → 각주란으로
+            wiki.querySelectorAll('a[id^="fn"][href*="#back"]').forEach(a=>{
+                const p=a.closest('p')||a;
+                if(!box.contains(p)){box.appendChild(p);fix('본문으로 빠져나간 각주를 각주란으로 옮겼습니다');}
+            });
+            // 각주 줄 모양: [n] 링크 + 글 칸 (글이 칸 밖으로 빠졌으면 다시 안으로)
+            [...box.children].forEach(p=>{
+                if(p.tagName!=='P'){const q=mk('p');q.append(...p.childNodes);p.replaceWith(q);p=q;}
+                const a=p.querySelector('a[id^="fn"]');
+                if(!a){if(!p.textContent.trim()&&!p.querySelector('img')) p.remove();return;}
+                if(p.firstElementChild!==a) p.prepend(a);
+                let span=p.querySelector(':scope > span');
+                if(!span){span=mk('span');span.setAttribute('contenteditable',String(isEdit));p.appendChild(span);}
+                const out=[...p.childNodes].filter(n=>n!==a&&n!==span&&!(n.nodeType===3&&!n.textContent.trim()));
+                if(out.length){span.append(...out);fix('각주 글이 칸 밖으로 빠져 있어 다시 넣었습니다');}
+                if(!(a.nextSibling&&a.nextSibling.nodeType===3)) a.after(document.createTextNode(' '));
+            });
+            // 5) 섹션: 제목 모양, 본문 칸 하나씩
+            let n=0;
+            [...sec.querySelectorAll(':scope > h3.sec')].forEach(h=>{
+                n++;
+                let num=h.querySelector('.sec-num'),title=h.querySelector('.sec-title');
+                if(!title){title=mk('span','sec-title');title.setAttribute('contenteditable',String(isEdit));h.appendChild(title);fix('섹션 제목 칸이 없어 다시 만들었습니다');}
+                if(!num){const a=mk('a',null,'<span class="toc-num sec-num" contenteditable="'+isEdit+'">'+n+'.</span>');a.href='#toc';h.prepend(a,document.createTextNode(' '));fix('섹션 번호가 없어 다시 만들었습니다');}
+                const out=[...h.childNodes].filter(x=>!(x.nodeType===1&&(x.contains(h.querySelector('.sec-num'))||x===title))&&!(x.nodeType===3&&!x.textContent.trim()));
+                if(out.length){title.append(...out.map(x=>x.nodeType===1&&x.matches('a[href="#toc"]')?document.createTextNode(x.textContent):x));fix('섹션 제목 밖으로 빠진 글을 제목 칸에 다시 넣었습니다');}
+                let body=h.nextElementSibling;
+                if(!body||body.tagName!=='DIV'||body.matches('.footnote,.wk-top,.info')){body=mk('div',null,'<p contenteditable="'+isEdit+'"><br></p>');h.after(body);fix('섹션 본문 칸이 없어 다시 만들었습니다');}
+                // 본문 칸 뒤에 이어 붙은 다른 칸(같은 섹션) → 하나로
+                for(let x=body.nextElementSibling;x&&x.tagName==='DIV'&&!x.matches('.footnote,.wk-top,.info,h3');x=body.nextElementSibling){body.append(...x.childNodes);x.remove();fix('나뉜 섹션 본문을 하나로 합쳤습니다');}
+            });
+            // 6) 어느 칸에도 속하지 않은 내용 → 바로 앞 본문 칸(없으면 분류 아래 칸)으로
+            let lastBody=top;
+            [...sec.childNodes].forEach(x=>{
+                if(x.nodeType===3){if(x.textContent.trim()){const p=newPara();p.textContent=x.textContent;lastBody.appendChild(p);fix('칸 밖에 떠 있던 글을 본문 칸에 넣었습니다');}x.remove();return;}
+                if(x.nodeType!==1) return;
+                if(x===head||x===cat||x===top||x===info||x===box||x.matches('h3.sec')) return;
+                if(x.tagName==='DIV'&&x.previousElementSibling&&x.previousElementSibling.matches('h3.sec')){lastBody=x;return;}
+                if(x.tagName==='HR') return x.remove();
+                lastBody.appendChild(/^(P|TABLE|UL|BLOCKQUOTE|MARK|DETAILS)$/.test(x.tagName)?x:(()=>{const p=newPara();p.append(x);return p;})());
+                fix('칸 밖에 떠 있던 내용을 본문 칸에 넣었습니다');
+            });
+            // 7) 각주 번호·순서를 본문에 나오는 순서대로
+            if(!footnotesInSync()){renumberFootnotes();fix('각주 번호와 순서를 본문 순서대로 다시 맞췄습니다');}
+            normalize();renumberFootnotes();rebuildToc();applyCollapse();
+            return fixes;
+        }
+        const reportCheck=f=>f.length?alert('문서 점검: '+f.length+'건을 고쳤습니다.\n\n- '+f.join('\n- ')):toast('문서 점검: 이상 없음');
         function cbRepairUI(){
             try{endCellDrag();}catch(e){}
             if(!cp.el.hidden) closePicker(true);
@@ -2952,16 +3046,24 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
         async function refreshDoc(){
             if(collab.on){
                 cbRepairUI();
+                const fixes=checkDoc();
                 if(collab.host){
                     const snap=cbSnapshot();
                     cbSend({t:'full',order:snap.order,units:snap.units,locks:collab.locks,peers:collab.peers});
                     cbRenderLocks();toast('모든 참여자의 화면을 지금 내 문서로 다시 맞췄습니다');
-                }else{cbSend({t:'resync'});toast('방장의 문서로 다시 맞추는 중…');}
+                }else{
+                    // 참여자: 방장 문서를 다시 받고, 받은 문서도 점검(고친 내용은 모두에게 반영됨)
+                    collab.checkAfterSync=true;cbSend({t:'resync'});toast('방장의 문서로 다시 맞추는 중…');
+                    return;
+                }
+                setTimeout(()=>reportCheck(fixes),300);
                 return;
             }
             if(!confirm('화면을 새로고침할까요?\n지금 내용은 저장해 두었다가 그대로 다시 불러옵니다. (뒤로가기 기록은 지워집니다)')) return;
-            flushHistory();await saveDraft();
-            try{sessionStorage.setItem('wk-reload','1');}catch(e){}
+            flushHistory();
+            const fixes=checkDoc();
+            await saveDraft();
+            try{sessionStorage.setItem('wk-reload','1');sessionStorage.setItem('wk-check',JSON.stringify(fixes));}catch(e){}
             location.reload();
         }
         function openCollab(){
@@ -3601,7 +3703,8 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
             mo.observe(wiki,{subtree:true,childList:true,characterData:true,attributes:true});
             toggleEdit();
             record();
-            if(location.hash.startsWith('#join=')) openCollab();   // 함께 편집 링크로 열었으면 참여 창
+            if(location.hash.startsWith('#join=')) openCollab();
+            {let f=null;try{f=JSON.parse(sessionStorage.getItem('wk-check')||'null');sessionStorage.removeItem('wk-check');}catch(e){}if(f) setTimeout(()=>reportCheck(f),300);}   // 새로고침 점검 결과   // 함께 편집 링크로 열었으면 참여 창
         });
         window.addEventListener('beforeunload',()=>{flushHistory();if(dirty) saveDraft();});
     </script>
