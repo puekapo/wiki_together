@@ -310,9 +310,13 @@
                 <span class="pair"><input type="text" id="tblW" title="예: 100%, 400 (px)"><button onclick="tblOp('tblWidth')">적용</button></span>
                 <span class="pair"><input type="text" id="colW" title="선택한 열의 너비. 예: 120 (px), 30%"><button onclick="tblOp('colWidth')">적용</button></span>
                 <span class="pair"><input type="text" id="rowH" title="선택한 행의 높이. 예: 40 (px)"><button onclick="tblOp('rowHeight')">적용</button></span>
+            </div>
+            <div class="btn-group" data-ctx="table">
+                <button onclick="tblOp('eqWidth')" title="열 너비를 모두 같게 (여러 칸을 드래그했으면 그 열들만)">너비 같게</button>
+                <button onclick="tblOp('eqHeight')" title="행 높이를 모두 같게 — 가장 높은 행에 맞춤 (여러 칸을 드래그했으면 그 행들만)">높이 같게</button>
                 <button onclick="tblOp('fit')" id="fitBtn" title="화면 너비가 바뀌어도 표의 비율을 유지하고, 글씨·여백·이미지도 같은 비율로 줄이거나 늘림">비율 고정</button>
             </div>
-            <div class="hint" data-ctx="table">숫자만 쓰면 px, 비우고 적용하면 자동 · 여러 칸을 드래그하면 글씨/색/크기/정렬 버튼이 선택한 칸 전체에 적용됩니다</div>
+            <div class="hint" data-ctx="table">숫자만 쓰면 px, 비우고 적용하면 자동 · 너비/높이 같게는 여러 칸을 드래그하면 그 열·행만, 한 칸만 고르면 표 전체 · 여러 칸을 드래그하면 글씨/색/크기/정렬 버튼이 선택한 칸 전체에 적용됩니다</div>
             <div class="btn-group" data-ctx="img">
                 <span class="label"><i class="bi bi-image"></i> 이미지 크기</span>
                 <button onclick="imgOp('25%')">25%</button>
@@ -410,7 +414,7 @@
             <div class="cb-link"><input id="cbLink" readonly><button type="button" onclick="copyCollabLink()">복사</button></div>
             <label class="cb-lbl">참여자</label>
             <div id="cbPeers" class="cb-peers"></div>
-            <small>방장이 방을 닫거나 나가면 모두의 함께 편집이 끝나고, 각자 화면에 문서가 남습니다. 함께 편집 중에는 뒤로가기(Ctrl+Z)를 쓸 수 없습니다.</small>
+            <small>방장이 방을 닫거나 나가면 모두의 함께 편집이 끝나고, 각자 화면에 문서가 남습니다. 함께 편집 중 뒤로가기(Ctrl+Z)는 내가 고친 칸만 되돌립니다(그 뒤 다른 사람이 같은 칸을 고쳤으면 되돌리지 않음).</small>
         </div>
         <div id="cbStatus" class="cb-status"></div>
         <div class="modal-btns"><button class="btn-secondary" onclick="closeModal()">닫기</button><button class="btn-primary" id="cbMain" onclick="collabMain()">방 만들기</button></div>
@@ -565,11 +569,12 @@
         }
         // 함께 편집 중에는 문서 전체를 되돌리면 다른 사람이 고친 내용까지 덮이므로 쓰지 않음
         const cbBusy=()=>typeof collab!=='undefined'&&collab.on;
-        function undo(){if(cbBusy()) return toast('함께 편집 중에는 뒤로가기를 쓸 수 없습니다');flushHistory();restoreHistory(hist.idx-1);}
-        function redo(){if(cbBusy()) return toast('함께 편집 중에는 앞으로가기를 쓸 수 없습니다');flushHistory();restoreHistory(hist.idx+1);}
+        // 함께 편집 중: 문서 전체가 아니라 '내가 고친 칸'만 되돌림 (다른 사람의 수정은 그대로)
+        function undo(){if(cbBusy()) return cbUndo(-1);flushHistory();restoreHistory(hist.idx-1);}
+        function redo(){if(cbBusy()) return cbUndo(1);flushHistory();restoreHistory(hist.idx+1);}
         function updUndoBtns(){
-            $('undoBtn').disabled=hist.idx<=0||cbBusy();
-            $('redoBtn').disabled=hist.idx>=hist.stack.length-1||cbBusy();
+            $('undoBtn').disabled=cbBusy()?!collab.undo.length:hist.idx<=0;
+            $('redoBtn').disabled=cbBusy()?!collab.redo.length:hist.idx>=hist.stack.length-1;
         }
 
         /* ================= 커서 위치 기억/복원 ================= */
@@ -683,12 +688,13 @@
             el.addEventListener('mousedown',e=>{if(!e.target.closest('input')) e.preventDefault();});
             cp.open=btn=>{
                 if(cp.target===btn&&!el.hidden) return closePicker();
+                if(!el.hidden&&cp.target) closePicker();   // 다른 색 창을 열면 앞의 색은 적용하고 닫음
                 el.hidden=false;showAdv(false);
                 const none=btn.value==='transparent';
                 cp.target=none?null:btn;   // '없음'일 때는 창을 열기만 해서 값이 바뀌지 않게
                 noneBtn.hidden=btn.id!=='bgColor';
                 setHex(COLOR_RE.test(btn.value)?btn.value.toLowerCase():none?'#ffffff':'#000000');
-                cp.drawChips();cp.target=btn;
+                cp.drawChips();cp.target=btn;cp.startVal=btn.value;
                 noneBtn.classList.toggle('sel',none);cp.place();
             };
             // 색 버튼 아래(공간이 없으면 위)에 화면 밖으로 나가지 않게
@@ -725,9 +731,29 @@
             if(document.fonts){document.fonts.ready.then(mark);document.fonts.addEventListener('loadingdone',later);}   // 아이콘 글꼴이 늦게 불러와져 버튼 너비가 바뀌는 경우
             new ResizeObserver(()=>{if(tb.clientWidth!==lastW){lastW=tb.clientWidth;mark();}}).observe(tb);
         }
-        function closePicker(){cp.el.hidden=true;cp.target=null;}
+        // 색 창을 닫을 때 색이 바뀌었으면 바로 적용 (따로 적용 버튼을 누르지 않아도). Esc는 취소
+        function closePicker(cancel){
+            const t=cp.target,changed=t&&t.value!==cp.startVal;
+            if(cancel&&changed) t.value=cp.startVal;
+            cp.el.hidden=true;cp.target=null;
+            if(!cancel&&changed) applyPickedColor(t);
+        }
+        function applyPickedColor(btn){
+            const act={fgColor:()=>autoFmt('fg'),bgColor:()=>autoFmt('bg'),cellBg:()=>tblOp('cellBg'),tblBorder:()=>tblOp('border'),qBg:()=>quoteOp('bg'),qChip:()=>quoteOp('chip')}[btn.id];
+            if(act) try{act();}catch(e){console.error(e);}
+        }
+        // 글씨색·배경색: 드래그한 글씨(또는 선택한 표 칸)에 적용. 커서만 있으면 이어서 쓰는 글씨에 적용
+        function autoFmt(kind){
+            if(formatCells()) return fmt(kind);
+            const r=lastRange;
+            if(!isEdit||!r||!r.startContainer.isConnected||!wiki.contains(r.startContainer)||!caretHost()) return;
+            if(!r.collapsed) return fmt(kind);
+            restoreSel();
+            document.execCommand('styleWithCSS',false,true);
+            document.execCommand(kind==='fg'?'foreColor':'hiliteColor',false,$(kind==='fg'?'fgColor':'bgColor').value);
+        }
         document.addEventListener('pointerdown',e=>{if(!cp.el.hidden&&!e.target.closest('#cpop,.cp-input')) closePicker();});
-        document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!cp.el.hidden) closePicker();});
+        document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!cp.el.hidden) closePicker(true);});
         addEventListener('resize',()=>{if(!cp.el.hidden) closePicker();});
         // 색 버튼: .value 로 색을 읽고 쓰며(기존 코드 그대로), 값이 바뀌면 버튼 색도 바뀜
         {
@@ -1919,6 +1945,33 @@
                     for(let i=r.r1;i<=r.r2;i++) if(m.rows[i]){m.rows[i].style.height=v;if(!m.rows[i].getAttribute('style')) m.rows[i].removeAttribute('style');}
                     return;
                 }
+                // 열 너비 같게: 선택한 열들(한 칸만 골랐으면 표 전체)의 너비 합을 똑같이 나눔. 화면 너비에 맞춰 늘고 줄도록 %로
+                case 'eqWidth':{
+                    if(t.closest('.info')) return alert('상단 표는 왼쪽 칸 너비가 고정이라 쓸 수 없습니다.');
+                    const all=r.c1===r.c2,c1=all?0:r.c1,c2=all?m.nCols-1:r.c2,n=c2-c1+1;
+                    if(n<2) return;
+                    let cg=t.querySelector('colgroup');
+                    if(!cg){cg=document.createElement('colgroup');t.prepend(cg);}
+                    while(cg.children.length<m.nCols) cg.appendChild(document.createElement('col'));
+                    const tw=t.getBoundingClientRect().width||1;
+                    const colW=j=>{const c=m.cells.find(x=>x.c0===j&&x.c1===j);return c?c.el.getBoundingClientRect().width:tw/m.nCols;};
+                    let sum=0;for(let j=c1;j<=c2;j++) sum+=colW(j);
+                    const pct=all?100/n:sum/tw*100/n;
+                    for(let j=c1;j<=c2;j++) cg.children[j].style.width=(+pct.toFixed(3))+'%';
+                    // 칸에 직접 준 너비는 지워야 열 너비가 적용됨
+                    m.cells.filter(c=>c.c0>=c1&&c.c1<=c2).forEach(c=>{c.el.style.width='';if(!c.el.getAttribute('style')) c.el.removeAttribute('style');});
+                    return refreshCtx();
+                }
+                // 행 높이 같게: 선택한 행들(한 칸만 골랐으면 표 전체)을 그중 가장 높은 행에 맞춤 (글씨가 잘리지 않게)
+                case 'eqHeight':{
+                    const all=r.r1===r.r2,r1=all?0:r.r1,r2=all?m.rows.length-1:r.r2;
+                    const rows=m.rows.slice(r1,r2+1).filter(x=>!x.classList.contains('wk-rf-hide')&&x.getClientRects().length);
+                    if(rows.length<2) return;
+                    rows.forEach(x=>x.style.height='');
+                    const h=Math.ceil(Math.max(...rows.map(x=>x.getBoundingClientRect().height)));
+                    m.rows.slice(r1,r2+1).forEach(x=>x.style.height=h+'px');
+                    return refreshCtx();
+                }
                 case 'fit':
                     if(t.closest('.info')) return alert('상단 표에는 쓸 수 없습니다.');
                     setFit(t,!t.classList.contains('wk-fit'));
@@ -2550,7 +2603,7 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                                     'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js',
                                     'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'],()=>window.Peer);
         const CB_COLORS=['#e8590c','#1971c2','#2f9e44','#ae3ec9','#f08c00','#0c8599','#e64980','#5c940d'];
-        var collab={on:false,host:false,peer:null,conns:new Map(),hostConn:null,me:'',room:'',key:'',peers:{},locks:{},known:{},order:'',applying:false,timer:null,myUnit:null,badges:[]};
+        var collab={on:false,host:false,peer:null,conns:new Map(),hostConn:null,me:'',room:'',key:'',peers:{},locks:{},known:{},order:'',applying:false,timer:null,myUnit:null,badges:[],undo:[],redo:[]};
         const rid=n=>{const a=crypto.getRandomValues(new Uint8Array(n));return [...a].map(x=>'abcdefghijkmnpqrstuvwxyz23456789'[x%32]).join('');};
         function toast(msg){const t=document.createElement('div');t.className='wk-toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2200);}
         // 받은 내용 안전 처리: 스크립트·이벤트 속성·javascript: 주소 제거
@@ -2637,21 +2690,75 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
         function cbSync(){
             if(!collab.on) return;
             if(composing) return cbScheduleSync();
-            const snap=cbSnapshot(),units={};
+            const snap=cbSnapshot(),units={},ch={};
             Object.entries(snap.units).forEach(([k,h])=>{
                 const lk=collab.locks[k];
-                if(collab.known[k]!==h&&!(lk&&lk!==collab.me)){units[k]=h;collab.known[k]=h;}
+                if(collab.known[k]!==h&&!(lk&&lk!==collab.me)){ch[k]=[collab.known[k]??null,h];units[k]=h;collab.known[k]=h;}
             });
             const order=snap.order.join('|'),msg={t:'units',from:collab.me,units};
-            if(order!==collab.order){msg.order=snap.order;collab.order=order;}
+            let ord=null;
+            if(order!==collab.order){
+                const prev=collab.order?collab.order.split('|'):[];
+                prev.forEach(k=>{if(!(k in snap.units)&&k in collab.known){ch[k]=[collab.known[k],null];delete collab.known[k];}});   // 지운 칸
+                ord=[prev,snap.order];msg.order=snap.order;collab.order=order;
+            }
             if(!Object.keys(units).length&&!msg.order) return;
             cbSend(msg);
+            if(!cbSync.replaying) cbRecord(ch,ord);
         }
         function cbSend(msg,except){
             if(collab.host){collab.conns.forEach((c,id)=>{if(id!==except&&c.open) try{c.send(msg);}catch(e){}});}
             else if(collab.hostConn&&collab.hostConn.open) try{collab.hostConn.send(msg);}catch(e){}
         }
         const cbObserver=new MutationObserver(()=>cbScheduleSync());
+        // 내 수정 기록: 같은 칸을 이어서 고치면(1.5초 안) 한 번으로 묶음
+        function cbRecord(ch,ord){
+            const keys=Object.keys(ch);if(!keys.length&&!ord) return;
+            const last=collab.undo[collab.undo.length-1],now=Date.now();
+            if(last&&!ord&&!last.order&&keys.length===1&&Object.keys(last.units).length===1&&keys[0] in last.units&&now-last.time<1500){
+                last.units[keys[0]][1]=ch[keys[0]][1];last.time=now;
+            }else{
+                collab.undo.push({units:ch,order:ord,time:now});
+                if(collab.undo.length>100) collab.undo.shift();
+            }
+            collab.redo=[];updUndoBtns();
+        }
+        function cbUndo(dir){
+            clearTimeout(collab.timer);cbSync();   // 아직 안 보낸 수정부터 정리
+            const from=dir<0?collab.undo:collab.redo,to=dir<0?collab.redo:collab.undo;
+            const e=from.pop();if(!e){updUndoBtns();return;}
+            const bi=dir<0?1:0,ti=dir<0?0:1;   // 지금 상태여야 하는 값 / 바꿀 값
+            const snap=cbSnapshot();
+            for(const [k,v] of Object.entries(e.units)){
+                const lk=collab.locks[k];
+                if(lk&&lk!==collab.me){toast(((collab.peers[lk]||{}).name||'다른 사람')+' 님이 고치는 중인 칸이라 되돌릴 수 없습니다');from.push(e);return;}
+                if((snap.units[k]??null)!==v[bi]){toast('그 뒤에 다른 사람이 같은 칸을 고쳐서 되돌리지 않았습니다');updUndoBtns();return;}
+            }
+            // 칸 순서: 그사이 다른 칸이 추가·삭제됐어도 내 변경만 반영
+            let order=null;
+            if(e.order){
+                const want=e.order[ti],cur=snap.order.slice();
+                Object.entries(e.units).forEach(([k,v])=>{
+                    const i=cur.indexOf(k);
+                    if(v[ti]===null){if(i>=0) cur.splice(i,1);}
+                    else if(i<0){
+                        const wi=want.indexOf(k);let at=-1;
+                        for(let j=wi-1;j>=0;j--){const p=cur.indexOf(want[j]);if(p>=0){at=p;break;}}
+                        cur.splice(at+1,0,k);
+                    }
+                });
+                order=cur;
+            }
+            const units={};Object.entries(e.units).forEach(([k,v])=>{if(v[ti]!==null) units[k]=v[ti];});
+            cbApply(order,units);
+            // 적용한 결과를 다른 사람에게도 (일반 수정처럼)
+            const after=cbSnapshot(),msg={t:'units',from:collab.me,units:{}};
+            Object.keys(units).forEach(k=>{msg.units[k]=after.units[k];collab.known[k]=after.units[k];});
+            Object.entries(e.units).forEach(([k,v])=>{if(v[ti]===null) delete collab.known[k];});
+            if(order){msg.order=after.order;collab.order=after.order.join('|');}
+            cbSend(msg);
+            to.push(e);updUndoBtns();
+        }
         // 잠금 표시: 남이 고치는 칸은 흐리게 + 이름표
         function cbRenderLocks(){
             wiki.querySelectorAll('.wk-locked').forEach(e=>dropClass(e,'wk-locked'));
@@ -2706,7 +2813,7 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
             });
         }
         function cbBegin(){
-            collab.on=true;collab.known=cbSnapshot().units;collab.order=cbSnapshot().order.join('|');
+            collab.on=true;collab.known=cbSnapshot().units;collab.order=cbSnapshot().order.join('|');collab.undo=[];collab.redo=[];
             cbObserver.observe(wiki,{subtree:true,childList:true,characterData:true,attributes:true});
             cbUpdateUI();
         }
@@ -2715,7 +2822,7 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
             collab.on=false;cbObserver.disconnect();
             try{collab.conns.forEach(c=>c.close());collab.hostConn&&collab.hostConn.close();}catch(e){}
             try{collab.peer&&collab.peer.destroy();}catch(e){}
-            Object.assign(collab,{host:false,peer:null,conns:new Map(),hostConn:null,peers:{},locks:{},myUnit:null});
+            Object.assign(collab,{host:false,peer:null,conns:new Map(),hostConn:null,peers:{},locks:{},myUnit:null,undo:[],redo:[]});
             cbRenderLocks();cbUpdateUI();
             if(location.hash.startsWith('#join=')) history.replaceState(null,'',location.pathname+location.search);
             if(was&&msg) alert(msg);
