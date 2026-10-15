@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>캐릭터 위키 에디터</title>
+    <title>위키 투게더</title>
+    <meta property="og:title" content="위키 투게더">
+    <meta name="description" content="링크로 함께 편집하는 캐릭터 위키 에디터">
+    <meta property="og:description" content="링크로 함께 편집하는 캐릭터 위키 에디터">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -256,6 +259,7 @@
         <button onclick="toggleEdit()" id="editBtn"><i class="bi bi-pencil-square"></i> 편집</button>
         <button onclick="openImport()"><i class="bi bi-folder2-open"></i> 불러오기</button>
         <button onclick="save()"><i class="bi bi-cloud-check"></i> 저장</button>
+        <button onclick="resetDoc()" title="문서를 처음 상태(기본 틀)로 되돌림 — 책갈피는 지워지지 않음"><i class="bi bi-eraser"></i> 초기화</button>
         <button onclick="copyCode()"><i class="bi bi-clipboard"></i> 코드복사</button>
         <button onclick="downloadCode()"><i class="bi bi-download"></i> 다운로드</button>
         <button onclick="saveImage()" id="imgSaveBtn"><i class="bi bi-camera"></i> 이미지 저장</button>
@@ -474,6 +478,7 @@
     <script>
         /* ================= 공통 ================= */
         const wiki=document.querySelector('.wiki'),delBtn=document.getElementById('blockDel');
+        const BLANK_DOC=wiki.innerHTML;   // 초기화용: 처음 열었을 때의 기본 틀
         const $=id=>document.getElementById(id);
         const nodeEl=n=>n.nodeType===1?n:n.parentElement;
         const isBlank=el=>!el.textContent.replace(/[\s​]/g,'')&&!el.querySelector('img');
@@ -2081,6 +2086,13 @@
                 del.onclick=async()=>{if(!confirm(`"${n}" 책갈피를 삭제할까요?`)) return;await bmWrite(m=>delete m[n]);renderBookmarks();};
                 row.append(open,del);box.appendChild(row);
             });
+        }
+        // 초기화: 기본 틀로 되돌림 (뒤로가기로 되돌릴 수 있음, 책갈피는 그대로)
+        function resetDoc(){
+            if(typeof collab!=='undefined'&&collab.on) return alert('함께 편집 중에는 초기화할 수 없습니다. 함께 편집을 끝낸 뒤 사용하세요.');
+            if(!confirm('문서를 처음 상태(기본 틀)로 초기화할까요?\n지금 내용은 뒤로가기(Ctrl+Z)로 되돌릴 수 있고, 저장된 책갈피는 지워지지 않습니다.')) return;
+            loadDoc(BLANK_DOC);stampDate();rebaseHistory();   // 날짜 갱신까지 한 번의 뒤로가기로
+            window.scrollTo(0,0);
         }
         function openImport(){openModal('importM');renderBookmarks();}
         // 저장본(편집기 형식 HTML)을 문서로 불러오기
