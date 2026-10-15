@@ -257,6 +257,7 @@
     <div id="toolbar">
         <div class="btn-group">
         <button onclick="toggleEdit()" id="editBtn"><i class="bi bi-pencil-square"></i> 편집</button>
+        <button onclick="refreshDoc()" id="refreshBtn" title="화면에 오류가 났을 때 다시 정리 — 함께 편집 중이면 방에서 나가지 않고 문서를 다시 맞춤"><i class="bi bi-arrow-repeat"></i> 새로고침</button>
         <button onclick="openImport()"><i class="bi bi-folder2-open"></i> 불러오기</button>
         <button onclick="save()"><i class="bi bi-cloud-check"></i> 저장</button>
         <button onclick="resetDoc()" title="문서를 처음 상태(기본 틀)로 되돌림 — 책갈피는 지워지지 않음"><i class="bi bi-eraser"></i> 초기화</button>
@@ -2869,6 +2870,7 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                             cbApply(m.order||null,units);
                             cbSend({t:'units',from:c.peer,order:m.order,units},c.peer);
                         }else if(m.t==='lock') cbSetLock(c.peer,m.unit||null);
+                        else if(m.t==='resync'){const snap=cbSnapshot();c.send({t:'full',order:snap.order,units:snap.units,locks:collab.locks,peers:collab.peers});}
                     });
                     c.on('close',()=>{
                         if(!collab.conns.has(c.peer)) return;
@@ -2904,6 +2906,11 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                             hideDel();refreshCtx();res();
                         }else if(m.t==='units'){if(m.from!==collab.me) cbApply(m.order||null,m.units||{});}
                         else if(m.t==='locks'){collab.locks=m.locks||{};cbRenderLocks();}
+                        else if(m.t==='full'){
+                            collab.locks=m.locks||{};if(m.peers) collab.peers=m.peers;
+                            cbApply(m.order,m.units||{});collab.undo=[];collab.redo=[];updUndoBtns();cbUpdateUI();
+                            toast('방장의 문서로 다시 맞췄습니다');
+                        }
                         else if(m.t==='peers'){collab.peers=m.peers||{};cbUpdateUI();cbRenderLocks();}
                         else if(m.t==='bye') cbEnd('방장이 방을 닫아 함께 편집이 끝났습니다. 문서는 지금 화면에 그대로 남아 있습니다.');
                     });
@@ -2931,6 +2938,31 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                 $('cbPeers').replaceChildren(...Object.entries(collab.peers).map(([id,p])=>{const s=document.createElement('span'),i=document.createElement('i');i.style.background=p.color;s.append(i,p.name+(id===collab.me?' (나)':'')+(collab.host&&id===collab.me||!collab.host&&id===collab.room?' · 방장':''));return s;}));
             }
             if(typeof updUndoBtns==='function') updUndoBtns();
+        }
+        /* 새로고침: 오류로 화면이 꼬였을 때 되돌리기
+           - 함께 편집 중: 방에서 나가지 않고 문서를 다시 맞춤 (참여자 → 방장 문서 받기 / 방장 → 모두에게 내 문서 다시 보냄)
+           - 혼자일 때: 지금 내용을 저장한 뒤 페이지를 다시 열고 그대로 불러옴 */
+        function cbRepairUI(){
+            try{endCellDrag();}catch(e){}
+            if(!cp.el.hidden) closePicker(true);
+            composing=false;hideDel();clearTemp(wiki);
+            normalize();renumberFootnotes();rebuildToc();applyCollapse();refreshCtx();
+            if($('toolbar').markGroups) $('toolbar').markGroups();
+        }
+        async function refreshDoc(){
+            if(collab.on){
+                cbRepairUI();
+                if(collab.host){
+                    const snap=cbSnapshot();
+                    cbSend({t:'full',order:snap.order,units:snap.units,locks:collab.locks,peers:collab.peers});
+                    cbRenderLocks();toast('모든 참여자의 화면을 지금 내 문서로 다시 맞췄습니다');
+                }else{cbSend({t:'resync'});toast('방장의 문서로 다시 맞추는 중…');}
+                return;
+            }
+            if(!confirm('화면을 새로고침할까요?\n지금 내용은 저장해 두었다가 그대로 다시 불러옵니다. (뒤로가기 기록은 지워집니다)')) return;
+            flushHistory();await saveDraft();
+            try{sessionStorage.setItem('wk-reload','1');}catch(e){}
+            location.reload();
         }
         function openCollab(){
             if(!$('cbName').value){let n='';try{n=localStorage.getItem('wk-name')||'';}catch(e){}$('cbName').value=n;}
@@ -3560,7 +3592,8 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
 
         window.addEventListener('load',async()=>{
             const d=await loadDraft();
-            if(d&&d!==wiki.innerHTML&&confirm('저장본을 불러올까요?')) wiki.innerHTML=d;
+            let auto=false;try{auto=sessionStorage.getItem('wk-reload')==='1';sessionStorage.removeItem('wk-reload');}catch(e){}
+            if(d&&d!==wiki.innerHTML&&(auto||confirm('저장본을 불러올까요?'))) wiki.innerHTML=d;   // 새로고침 버튼으로 다시 연 경우는 묻지 않음
             normalize();
             renumberFootnotes();
             rebuildToc();
