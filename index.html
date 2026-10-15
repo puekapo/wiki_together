@@ -80,6 +80,7 @@
             #toolbar input[type=text]{padding:5px 8px;font-size:12px}
         }
         @media(max-width:767px){
+            #toolbar .ico-m .lbl{display:none}   /* 좁은 화면: 다운로드·이미지 저장·워드 저장은 아이콘만 */
             #toolbar input[type=text]{width:76px}
             #toolbar #linkEditUrl,#toolbar #imgSrc{width:160px}
             #ctxTools .hint{font-size:11px}
@@ -115,12 +116,14 @@
         .bm-del:hover{background:#fff0f0;color:#af0505}
         .bm-empty{padding:14px;color:#999;font-size:13px;text-align:center}
         /* 함께 편집 */
+        #collabM [hidden]{display:none}
         .cb-lbl{display:block;font-size:13px;font-weight:700;color:#444;margin:0 0 6px}
         .cb-link{display:flex;gap:6px;margin-bottom:15px}.cb-link input{margin:0;flex:1;min-width:0;font-size:12px}
         .cb-link button{flex:none;padding:0 14px;border:1px solid #dee2e6;border-radius:4px;background:#f8f9fa;cursor:pointer;font-family:inherit}
         .cb-peers{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:15px}
         .cb-peers span{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:12px;background:#f1f3f5;font-size:13px}
-        .cb-peers i{width:9px;height:9px;border-radius:50%;display:inline-block}
+        .cb-peers button{border:0;background:none;padding:0 0 0 2px;margin:0;cursor:pointer;color:#868e96;font-size:13px;line-height:1}.cb-peers button:hover{color:#af0505}
+        .cb-peers span>i{width:9px;height:9px;border-radius:50%;display:inline-block}
         .cb-status{font-size:13px;color:#af0505;min-height:1em;margin:-5px 0 12px}
         #collabBtn.active{background:#198754;border-color:#198754;color:#fff}
         .wiki .wk-locked{pointer-events:none;opacity:.55;outline:2px dashed var(--lk,#888);outline-offset:3px}
@@ -263,14 +266,14 @@
     <div id="toolbar">
         <div class="btn-group">
         <button onclick="toggleEdit()" id="editBtn"><i class="bi bi-pencil-square"></i> 편집</button>
-        <button onclick="refreshDoc()" id="refreshBtn" title="화면에 오류가 났을 때 다시 정리 — 함께 편집 중이면 방에서 나가지 않고 문서를 다시 맞춤"><i class="bi bi-arrow-repeat"></i> 새로고침</button>
         <button onclick="openImport()"><i class="bi bi-folder2-open"></i> 불러오기</button>
         <button onclick="save()"><i class="bi bi-cloud-check"></i> 저장</button>
+        <button onclick="refreshDoc()" id="refreshBtn" title="화면에 오류가 났을 때 다시 정리 — 함께 편집 중이면 방에서 나가지 않고 문서를 다시 맞춤"><i class="bi bi-arrow-repeat"></i> 새로고침</button>
         <button onclick="resetDoc()" title="문서를 처음 상태(기본 틀)로 되돌림 — 책갈피는 지워지지 않음"><i class="bi bi-eraser"></i> 초기화</button>
         <button onclick="copyCode()"><i class="bi bi-clipboard"></i> 코드복사</button>
-        <button onclick="downloadCode()"><i class="bi bi-download"></i> 다운로드</button>
-        <button onclick="saveImage()" id="imgSaveBtn"><i class="bi bi-camera"></i> 이미지 저장</button>
-        <button onclick="saveWord()" id="wordBtn" title="워드(.docx) 파일 — 구글 문서에서도 열 수 있음"><i class="bi bi-file-earmark-word"></i> 워드 저장</button>
+        <button onclick="downloadCode()" class="ico-m"><i class="bi bi-download"></i> 다운로드</button>
+        <button onclick="saveImage()" id="imgSaveBtn" class="ico-m"><i class="bi bi-camera"></i> 이미지 저장</button>
+        <button onclick="saveWord()" id="wordBtn" class="ico-m" title="워드(.docx) 파일 — 구글 문서에서도 열 수 있음"><i class="bi bi-file-earmark-word"></i> 워드 저장</button>
         <button onclick="openCollab()" id="collabBtn" title="링크로 여러 명이 함께 편집"><i class="bi bi-people"></i> <span>함께 편집</span></button>
         </div>
         <div class="btn-group edit-only">
@@ -418,14 +421,16 @@
         <div id="cbOff">
             <label class="cb-lbl">내 이름 (다른 사람에게 보임)</label>
             <input id="cbName" maxlength="20" placeholder="이름">
+            <label class="cb-lbl" id="cbPwLbl">방 비밀번호 (선택 — 비워 두면 링크만으로 들어올 수 있어요)</label>
+            <input id="cbPw" type="password" maxlength="40" placeholder="비밀번호" autocomplete="new-password" onkeydown="if(event.key==='Enter'){event.preventDefault();collabMain()}">
             <small id="cbIntro">방을 만들면 공유 링크가 생깁니다. 링크를 받은 사람이 열면 같은 문서를 함께 고칠 수 있습니다.<br>누가 고치고 있는 칸(섹션·상단 표 등)은 다른 사람에게 잠깁니다. 서버에 문서를 저장하지 않고 브라우저끼리 직접(암호화) 주고받으며, 처음 연결할 때만 공개 연결 도우미(PeerJS)를 거칩니다.</small>
         </div>
         <div id="cbOn" hidden>
-            <label class="cb-lbl">공유 링크 — 이 링크를 가진 사람은 누구나 들어올 수 있어요</label>
+            <label class="cb-lbl" id="cbLinkLbl">공유 링크</label>
             <div class="cb-link"><input id="cbLink" readonly><button type="button" onclick="copyCollabLink()">복사</button></div>
             <label class="cb-lbl">참여자</label>
             <div id="cbPeers" class="cb-peers"></div>
-            <small>방장이 방을 닫거나 나가면 모두의 함께 편집이 끝나고, 각자 화면에 문서가 남습니다. 함께 편집 중 뒤로가기(Ctrl+Z)는 내가 고친 칸만 되돌립니다.</small>
+            <small>방장이 방을 닫거나 나가면 모두의 함께 편집이 끝나고, 각자 화면에 문서가 남습니다. 방장은 참여자 이름 옆 ✕로 내보낼 수 있습니다. 함께 편집 중 뒤로가기(Ctrl+Z)는 내가 고친 칸만 되돌립니다.</small>
         </div>
         <div id="cbStatus" class="cb-status"></div>
         <div class="modal-btns"><button class="btn-secondary" onclick="closeModal()">닫기</button><button class="btn-primary" id="cbMain" onclick="collabMain()">방 만들기</button></div>
@@ -516,7 +521,7 @@
             isEdit=!isEdit;
             document.body.classList.toggle('editing',isEdit);
             if($('toolbar').markGroups) $('toolbar').markGroups();
-            $('editBtn').innerHTML=isEdit?'<i class="bi bi-eye"></i> 보기':'<i class="bi bi-pencil-square"></i> 편집';
+            $('editBtn').innerHTML=isEdit?'<i class="bi bi-eye"></i><span class="lbl"> 보기</span>':'<i class="bi bi-pencil-square"></i><span class="lbl"> 편집</span>';$('editBtn').title=isEdit?'보기':'편집';
             $('editBtn').classList.toggle('active',isEdit);
             wiki.setAttribute('data-edit',isEdit);
             // 각주 링크(sup)·링크칩(data-locked)은 항상 편집 불가
@@ -717,6 +722,16 @@
                 el.style.top=(r.bottom+6+h<=innerHeight||r.top-h-6<8?clamp(r.bottom+6,8,innerHeight-h-8):r.top-h-6)+'px';
             };
         }
+        // 아이콘이 있는 버튼의 글씨를 .lbl 로 감쌈 → 좁은 화면에서 .ico-m 버튼(다운로드·이미지 저장·워드 저장)은 아이콘만 보임 (글씨는 마우스를 올리면 뜨는 설명으로)
+        $('toolbar').querySelectorAll('button').forEach(b=>{
+            if(!b.querySelector(':scope>i.bi')) return;
+            let txt='';
+            [...b.childNodes].forEach(n=>{
+                if(n.nodeType===3&&n.textContent.trim()){const s=document.createElement('span');s.className='lbl';n.replaceWith(s);s.append(n);txt+=n.textContent;}
+                else if(n.nodeName==='SPAN'){n.classList.add('lbl');txt+=n.textContent;}
+            });
+            if(txt.trim()&&!b.title) b.title=txt.trim();
+        });
         // 상단바 묶음이 다음 줄로 내려가면 앞의 구분선을 숨김
         {
             // 묶음이 상단바 너비보다 넓으면 묶음 전체를 줄여서 한 줄에 맞춤
@@ -2622,7 +2637,7 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                                     'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js',
                                     'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'],()=>window.Peer);
         const CB_COLORS=['#e8590c','#1971c2','#2f9e44','#ae3ec9','#f08c00','#0c8599','#e64980','#5c940d'];
-        var collab={on:false,host:false,peer:null,conns:new Map(),hostConn:null,me:'',room:'',key:'',peers:{},locks:{},known:{},order:'',applying:false,timer:null,myUnit:null,badges:[],undo:[],redo:[]};
+        var collab={seen:{},beat:0,on:false,host:false,peer:null,conns:new Map(),hostConn:null,me:'',room:'',key:'',peers:{},locks:{},known:{},order:'',applying:false,timer:null,myUnit:null,badges:[],undo:[],redo:[]};
         const rid=n=>{const a=crypto.getRandomValues(new Uint8Array(n));return [...a].map(x=>'abcdefghijkmnpqrstuvwxyz23456789'[x%32]).join('');};
         function toast(msg){const t=document.createElement('div');t.className='wk-toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2200);}
         // 받은 내용 안전 처리: 스크립트·이벤트 속성·javascript: 주소 제거
@@ -2837,13 +2852,13 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
             cbUpdateUI();
         }
         function cbEnd(msg){
-            const was=collab.on;
+            const was=collab.on;clearInterval(collab.beat);
             collab.on=false;cbObserver.disconnect();
             try{collab.conns.forEach(c=>c.close());collab.hostConn&&collab.hostConn.close();}catch(e){}
             try{collab.peer&&collab.peer.destroy();}catch(e){}
-            Object.assign(collab,{host:false,peer:null,conns:new Map(),hostConn:null,peers:{},locks:{},myUnit:null,undo:[],redo:[]});
+            Object.assign(collab,{host:false,pw:'',banned:[],cids:{},seen:{},peer:null,conns:new Map(),hostConn:null,peers:{},locks:{},myUnit:null,undo:[],redo:[]});
             cbRenderLocks();cbUpdateUI();
-            if(location.hash.startsWith('#join=')) history.replaceState(null,'',location.pathname+location.search);
+            if(was&&location.hash.startsWith('#join=')) history.replaceState(null,'',location.pathname+location.search);   // 입장 실패 때는 링크를 남겨 다시 시도할 수 있게
             if(was&&msg) alert(msg);
         }
         const cbName=()=>{const n=$('cbName').value.trim()||'참여자';try{localStorage.setItem('wk-name',n);}catch(e){}return n;};
@@ -2851,7 +2866,7 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
         async function cbHost(){
             const name=cbName();$('cbStatus').textContent='방을 만드는 중…';
             try{
-                collab.room='wkedit-'+rid(12);collab.key=rid(16);
+                collab.room='wkedit-'+rid(12);collab.key=rid(16);collab.pw=$('cbPw').value;collab.banned=[];collab.cids={};
                 const p=await cbStartPeer(collab.room);
                 Object.assign(collab,{peer:p,host:true,me:p.id,peers:{[p.id]:{name,color:CB_COLORS[0]}},locks:{}});
                 p.on('connection',c=>{
@@ -2859,17 +2874,23 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                     const t=setTimeout(()=>{if(!ok) c.close();},10000);
                     c.on('data',m=>{
                         if(!m||typeof m!=='object') return;
+                        collab.seen[c.peer]=Date.now();
                         if(!ok){
                             if(m.t!=='hello'||m.key!==collab.key){c.close();return;}   // 링크의 열쇠가 맞아야 입장
+                            if(m.cid&&collab.banned.includes(m.cid)){clearTimeout(t);try{c.send({t:'deny',why:'ban'});}catch(e){}setTimeout(()=>c.close(),300);return;}   // 내보낸 사람은 다시 못 들어옴
+                            if(collab.pw&&m.pw!==collab.pw){   // 비밀번호를 정한 방은 비밀번호도 맞아야 입장 (마구 넣어 보기 어렵도록 잠시 뒤 거절)
+                                clearTimeout(t);setTimeout(()=>{try{c.send({t:'deny',why:'pw'});}catch(e){}setTimeout(()=>c.close(),300);},1200);return;
+                            }
                             ok=true;clearTimeout(t);
                             const used=Object.values(collab.peers).map(x=>x.color);
                             collab.peers[c.peer]={name:String(m.name||'참여자').slice(0,20),color:CB_COLORS.find(x=>!used.includes(x))||CB_COLORS[Object.keys(collab.peers).length%CB_COLORS.length]};
-                            collab.conns.set(c.peer,c);
+                            collab.conns.set(c.peer,c);if(m.cid) collab.cids[c.peer]=String(m.cid);
                             const snap=cbSnapshot();
                             c.send({t:'welcome',you:c.peer,order:snap.order,units:snap.units,colors:wiki.dataset.colors||'',peers:collab.peers,locks:collab.locks});
                             cbPeersChanged();toast(collab.peers[c.peer].name+' 님이 들어왔습니다');
                             return;
                         }
+                        if(m.t==='leave'){cbDrop(c.peer);return;}
                         if(m.t==='units'){
                             const units={};
                             Object.entries(m.units||{}).forEach(([k,h])=>{const lk=collab.locks[k];if(!lk||lk===c.peer) units[k]=String(h);});
@@ -2878,19 +2899,15 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                         }else if(m.t==='lock') cbSetLock(c.peer,m.unit||null);
                         else if(m.t==='resync'){const snap=cbSnapshot();c.send({t:'full',order:snap.order,units:snap.units,locks:collab.locks,peers:collab.peers});}
                     });
-                    c.on('close',()=>{
-                        if(!collab.conns.has(c.peer)) return;
-                        collab.conns.delete(c.peer);const nm=(collab.peers[c.peer]||{}).name;delete collab.peers[c.peer];
-                        Object.keys(collab.locks).forEach(k=>{if(collab.locks[k]===c.peer) delete collab.locks[k];});
-                        cbSend({t:'locks',locks:collab.locks});cbPeersChanged();if(nm) toast(nm+' 님이 나갔습니다');
-                    });
+                    c.on('close',()=>cbDrop(c.peer));
+                    c.on('error',()=>cbDrop(c.peer));
                 });
                 p.on('disconnected',()=>{try{p.reconnect();}catch(e){}});
-                cbBegin();$('cbStatus').textContent='';
+                cbBegin();cbBeat();$('cbStatus').textContent='';
             }catch(e){cbEnd();$('cbStatus').textContent='방을 만들지 못했습니다: '+(e&&e.type==='network'?'인터넷 연결을 확인하세요':(e.message||e));}
         }
         // 링크로 참여
-        async function cbJoin(room,key){
+        async function cbJoin(room,key,pw){
             const name=cbName();$('cbStatus').textContent='연결하는 중…';
             try{
                 const p=await cbStartPeer();
@@ -2900,15 +2917,18 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                 await new Promise((res,rej)=>{
                     const t=setTimeout(()=>rej(new Error('방에 연결하지 못했습니다. 링크가 맞는지, 방장이 방을 열어 두었는지 확인하세요')),20000);
                     p.on('error',e=>{clearTimeout(t);rej(e.type==='peer-unavailable'?new Error('방을 찾을 수 없습니다 (방이 닫혔거나 링크가 잘못됨)'):e);});
-                    c.on('open',()=>c.send({t:'hello',key,name}));
+                    c.on('open',()=>c.send({t:'hello',key,name,pw:pw||'',cid:cbCid()}));
                     c.on('data',m=>{
                         if(!m||typeof m!=='object') return;
+                        collab.seen.host=Date.now();
+                        if(m.t==='ping'){try{c.send({t:'pong'});}catch(e){}return;}
+                        if(m.t==='deny'){clearTimeout(t);welcomed=null;rej(new Error(m.why==='ban'?'방장이 이 방에서 내보내서 다시 들어갈 수 없습니다':'비밀번호가 맞지 않습니다'));return;}
                         if(m.t==='welcome'){
                             clearTimeout(t);welcomed=true;
                             flushHistory();
                             if(m.colors) setChips([...colorChips,...parseColors(m.colors)]);
                             collab.me=m.you;collab.peers=m.peers||{};collab.locks=m.locks||{};
-                            cbBegin();cbApply(m.order,m.units);
+                            cbBegin();cbBeat();cbApply(m.order,m.units);
                             hideDel();refreshCtx();res();
                         }else if(m.t==='units'){if(m.from!==collab.me) cbApply(m.order||null,m.units||{});}
                         else if(m.t==='locks'){collab.locks=m.locks||{};cbRenderLocks();}
@@ -2919,17 +2939,56 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                             else toast('방장의 문서로 다시 맞췄습니다');
                         }
                         else if(m.t==='peers'){collab.peers=m.peers||{};cbUpdateUI();cbRenderLocks();}
+                        else if(m.t==='kick') cbEnd('방장이 나를 방에서 내보냈습니다. 문서는 지금 화면에 그대로 남아 있습니다.');
                         else if(m.t==='bye') cbEnd('방장이 방을 닫아 함께 편집이 끝났습니다. 문서는 지금 화면에 그대로 남아 있습니다.');
                     });
                     c.on('close',()=>{
+                        if(welcomed===null) return;
                         if(!welcomed){clearTimeout(t);rej(new Error('입장이 거부되었습니다. 링크 전체(뒤쪽 열쇠 포함)를 그대로 받았는지 확인하세요'));return;}
                         cbEnd('방장과의 연결이 끊겨 함께 편집이 끝났습니다. 문서는 지금 화면에 그대로 남아 있습니다.');
                     });
                 });
                 $('cbStatus').textContent='';closeModal();toast('함께 편집에 참여했습니다');
-            }catch(e){cbEnd();openModal('collabM');cbUpdateUI();$('cbStatus').textContent=e.message||String(e);}
+            }catch(e){cbEnd();openModal('collabM');cbUpdateUI();$('cbStatus').textContent=e.message||String(e);if(pw!==undefined) $('cbPw').select();}
         }
-        function cbLink(){return location.href.split('#')[0]+'#join='+collab.room+'&k='+collab.key;}
+        // 방장: 나간 참여자 정리 (연결 끊김·창 닫기·응답 없음 모두)
+        function cbDrop(id){
+            const c=collab.conns.get(id);if(!c) return;
+            collab.conns.delete(id);delete collab.seen[id];try{c.close();}catch(e){}
+            const nm=(collab.peers[id]||{}).name;delete collab.peers[id];
+            Object.keys(collab.locks).forEach(k=>{if(collab.locks[k]===id) delete collab.locks[k];});
+            cbSend({t:'locks',locks:collab.locks});cbPeersChanged();if(nm) toast(nm+' 님이 나갔습니다');
+        }
+        /* 연결 확인: 창을 닫거나 기기가 잠들면 연결 끊김 알림이 오지 않을 때가 있어서
+           방장이 5초마다 확인 신호를 보내고, 20초 동안 아무 응답이 없는 참여자는 나간 것으로 처리.
+           참여자도 방장에게서 20초 동안 아무것도 오지 않으면 함께 편집을 끝냄 */
+        function cbBeat(){
+            clearInterval(collab.beat);collab.seen={};const now=Date.now();
+            if(collab.host) collab.conns.forEach((c,id)=>collab.seen[id]=now);else collab.seen.host=now;
+            collab.beat=setInterval(()=>{
+                if(!collab.on){clearInterval(collab.beat);return;}
+                const t=Date.now();
+                if(collab.host){
+                    cbSend({t:'ping'});
+                    [...collab.conns.keys()].forEach(id=>{if(t-(collab.seen[id]||t)>20000) cbDrop(id);});
+                }else if(t-(collab.seen.host||t)>20000) cbEnd('방장과의 연결이 끊겨 함께 편집이 끝났습니다. 문서는 지금 화면에 그대로 남아 있습니다.');
+            },5000);
+        }
+        // 창을 닫을 때: 방장은 방 닫기, 참여자는 나간다고 알림 (모바일은 pagehide만 오는 경우가 있어 둘 다)
+        function cbUnload(){if(!collab.on) return;cbSend(collab.host?{t:'bye'}:{t:'leave'});}
+        addEventListener('beforeunload',cbUnload);addEventListener('pagehide',cbUnload);
+        // 이 브라우저의 고유 번호 — 방장이 내보낸 사람이 같은 링크로 다시 들어오지 못하게
+        function cbCid(){let v='';try{v=localStorage.getItem('wk-cid')||'';if(!v){v=rid(16);localStorage.setItem('wk-cid',v);}}catch(e){v=window.__wkCid||(window.__wkCid=rid(16));}return v;}
+        // 방장: 참여자 내보내기
+        function cbKick(id){
+            const c=collab.conns.get(id),nm=(collab.peers[id]||{}).name||'참여자';
+            if(!collab.host||!c||!confirm(nm+' 님을 방에서 내보낼까요?\n같은 브라우저로는 이 방에 다시 들어올 수 없습니다.')) return;
+            if(collab.cids[id]) collab.banned.push(collab.cids[id]);
+            try{c.send({t:'kick'});}catch(e){}
+            setTimeout(()=>{try{c.close();}catch(e){}},300);
+        }
+        // 비밀번호는 링크에 넣지 않음 — 비밀번호가 있는 방이라는 표시(&p=1)만
+        function cbLink(){return location.href.split('#')[0]+'#join='+collab.room+'&k='+collab.key+(collab.pw?'&p=1':'');}
         // 링크 복사: 받는 사람에게 '위키 투게더'로 보이도록 제목 줄과 함께
         function copyCollabLink(){
             const v='[위키 투게더] 함께 편집 초대\n'+$('cbLink').value;
@@ -2940,11 +2999,17 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
             const on=collab.on,btn=$('collabBtn'),n=Object.keys(collab.peers).length;
             btn.classList.toggle('active',on);btn.querySelector('span').textContent=on?`함께 편집 중 (${n})`:'함께 편집';
             $('cbOff').hidden=on;$('cbOn').hidden=!on;
-            const join=!on&&location.hash.startsWith('#join=');
+            const join=!on&&location.hash.startsWith('#join='),needPw=join&&/&p=1/.test(location.hash);
             $('cbMain').textContent=on?(collab.host?'방 닫기':'나가기'):(join?'참여하기':'방 만들기');
+            $('cbPwLbl').textContent=join?'방 비밀번호 — 방장에게 따로 받은 비밀번호':'방 비밀번호 (선택 — 비워 두면 링크만으로 들어올 수 있어요)';
+            $('cbPwLbl').hidden=$('cbPw').hidden=join&&!needPw;
+            $('cbIntro').hidden=join;
             if(on){
+                $('cbLinkLbl').textContent=collab.host&&collab.pw?'공유 링크 — 비밀번호는 링크에 들어 있지 않으니 따로 알려 주세요':collab.host?'공유 링크 — 이 링크를 가진 사람은 누구나 들어올 수 있어요':'공유 링크';
                 $('cbLink').value=cbLink();
-                $('cbPeers').replaceChildren(...Object.entries(collab.peers).map(([id,p])=>{const s=document.createElement('span'),i=document.createElement('i');i.style.background=p.color;s.append(i,p.name+(id===collab.me?' (나)':'')+(collab.host&&id===collab.me||!collab.host&&id===collab.room?' · 방장':''));return s;}));
+                $('cbPeers').replaceChildren(...Object.entries(collab.peers).map(([id,p])=>{const s=document.createElement('span'),i=document.createElement('i');i.style.background=p.color;s.append(i,p.name+(id===collab.me?' (나)':'')+(collab.host&&id===collab.me||!collab.host&&id===collab.room?' · 방장':''));
+                    if(collab.host&&id!==collab.me){const x=document.createElement('button');x.type='button';x.title='내보내기';x.innerHTML='<i class="bi bi-x-lg"></i>';x.onclick=()=>cbKick(id);s.append(x);}
+                    return s;}));
             }
             if(typeof updUndoBtns==='function') updUndoBtns();
         }
@@ -3076,13 +3141,14 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                 if(collab.host) cbSend({t:'bye'});
                 setTimeout(()=>cbEnd(),collab.host?300:0);closeModal();return;
             }
-            const m=location.hash.match(/^#join=([\w-]+)&k=(\w+)/);
+            const m=location.hash.match(/^#join=([\w-]+)&k=(\w+)(&p=1)?/);
             if(m){
+                const pw=$('cbPw').value;
+                if(m[3]&&!pw){$('cbStatus').textContent='비밀번호를 입력하세요';$('cbPw').focus();return;}
                 if(!confirm('지금 편집기의 문서를 함께 편집하는 문서로 바꿉니다. 계속할까요?\n(지금 문서를 남기려면 취소 후 [저장]을 먼저 누르세요)')) return;
-                cbJoin(m[1],m[2]);
+                cbJoin(m[1],m[2],m[3]?pw:undefined);
             }else cbHost();
         }
-        addEventListener('beforeunload',()=>{if(collab.on&&collab.host) cbSend({t:'bye'});});
 
         /* ================= 불러온 저장본 정리 ================= */
         function normalize(){
