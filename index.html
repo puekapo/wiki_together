@@ -119,6 +119,8 @@
         #collabM [hidden]{display:none}
         .cb-lbl{display:block;font-size:13px;font-weight:700;color:#444;margin:0 0 6px}
         .cb-link{display:flex;gap:6px;margin-bottom:15px}.cb-link input{margin:0;flex:1;min-width:0;font-size:12px}
+        .cb-link input.cb-code{font:700 18px/1 ui-monospace,Consolas,monospace;letter-spacing:2px;text-align:center}
+        #cbCode{text-transform:uppercase;letter-spacing:1px}
         .cb-link button{flex:none;padding:0 14px;border:1px solid #dee2e6;border-radius:4px;background:#f8f9fa;cursor:pointer;font-family:inherit}
         .cb-peers{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:15px}
         .cb-peers span{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:12px;background:#f1f3f5;font-size:13px}
@@ -142,12 +144,23 @@
         .wiki[data-edit="true"] h3+div.wk-empty,.wiki[data-edit="true"] div.wk-top.wk-empty{display:block}
         .wiki[data-edit="true"] p.wk-tail{display:block}   /* 편집 중에는 끝의 빈 줄도 보여서 입력 가능 */   /* 편집 중에는 빈 본문도 보여서 입력 가능 */
         .wiki .block-hover{outline:2px dashed #af0505;outline-offset:2px}
+        /* 편집 중: 글씨를 다 지운 제목·번호 칸도 자리를 남겨 다시 클릭해 쓸 수 있게 */
+        .wiki[data-edit="true"] span[contenteditable="true"]:empty{display:inline-block;min-width:2.5em;min-height:1em;vertical-align:middle;background:rgba(175,5,5,.06);border-radius:3px}
+        .wiki[data-edit="true"] .sec-title:empty::before{content:'제목';color:#adb5bd;font-weight:400}
         .wiki .img-sel{outline:3px solid #2f7de1;outline-offset:2px}
         .wiki .link-sel{outline:2px solid #2f7de1;outline-offset:1px;border-radius:2px}
         .wiki .cell-sel{box-shadow:inset 0 0 0 2px #2f7de1;background-image:linear-gradient(rgba(47,125,225,.18),rgba(47,125,225,.18))}
         .wiki.cell-dragging,.wiki.cell-dragging *{user-select:none}
         .wiki .fn-flash{background:#fff3a0;transition:background .3s}
         @media(max-width:767px){#ctxTools{padding:8px 10px}}
+        /* 표 종류 고르기 메뉴 */
+        #toolbar .tb-menu{position:relative;display:inline-flex}
+        #toolbar .tb-caret{font-size:.7em;margin-left:2px;vertical-align:middle}
+        #toolbar .tb-pop{position:absolute;top:calc(100% + 4px);left:0;z-index:1100;display:flex;flex-direction:column;min-width:150px;background:#fff;border:1px solid #dee2e6;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:4px}
+        #toolbar .tb-pop[hidden]{display:none}
+        #toolbar .tb-pop button{border:0;text-align:left;white-space:nowrap;border-radius:3px}
+        /* 프로필 표: 편집 중 빈 이미지 칸 안내 */
+        .wiki[data-edit="true"] table.wk-prof td.img-cell:not(:has(img))::before{content:'이 칸을 누르고 [이미지]로 사진 넣기';display:block;padding:60px 8px;background:#f0f0f0;border:2px dashed #ccc;color:#999;font-size:14px;line-height:1.5}
     </style>
     <!-- 위키 본문 스타일 (복사/다운로드 시 그대로 포함) -->
     <style id="wiki-css">
@@ -234,6 +247,13 @@
         .wiki .info table td:not([colspan]){text-align:left}
         /* 상단 표 프로필 이미지: 칸 여백 없이 꽉 차게 */
         .wiki .info td.img-cell{padding:0;line-height:0}
+        /* 프로필 표 (본문): 상단 프로필 표와 같은 고정 너비·왼쪽 칸 너비·줄바꿈 */
+        .wiki table.wk-prof{width:497.78px;max-width:100%;table-layout:fixed}
+        .wiki table.wk-prof col:first-child{width:99.77px}
+        .wiki table.wk-prof td,.wiki table.wk-prof th{overflow-wrap:anywhere;word-break:break-word}
+        .wiki table.wk-prof td:not([colspan]){text-align:left}
+        .wiki table.wk-prof td.img-cell:has(img){padding:0;line-height:0}
+        .wiki table.wk-prof td.img-cell img{width:100%;display:block;margin:0;border-radius:0}
         .wiki .main-img img{width:100%;display:block;border-radius:0}
         .wiki .main-img .ph{display:flex;height:300px;align-items:center;justify-content:center;background:#f0f0f0;border:2px dashed #ccc;color:#999;font-size:14px;line-height:1.5}
         .wiki-fn-pop{display:none;position:absolute;z-index:1500;max-width:360px;background:#fff;border:1px solid #ccc;border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.2);padding:8px 12px;font:14px/1.6 "Noto Sans KR",sans-serif;color:#333}
@@ -285,7 +305,7 @@
             <button onclick="addQuote()"><i class="bi bi-chat-quote"></i> 대사</button>
             <button onclick="addSpoiler()"><i class="bi bi-exclamation-triangle"></i> 주의문구</button>
             <button onclick="addFold()" title="[ 펼치기 · 접기 ] — 본문 또는 표의 칸 안 커서 위치에 삽입"><i class="bi bi-arrows-expand"></i> 접기</button>
-            <button onclick="addTable()"><i class="bi bi-table"></i> 표</button>
+            <span class="tb-menu"><button onclick="toggleTblMenu()" id="tblMenuBtn" title="표 넣기 — 종류 고르기"><i class="bi bi-table"></i> 표 <i class="bi bi-caret-down-fill tb-caret"></i></button><span class="tb-pop" id="tblMenu" hidden><button onclick="pickTable('basic')"><i class="bi bi-table"></i> 기본 표</button><button onclick="pickTable('prof')" title="상단 프로필 표와 같은 너비(497.78px)·왼쪽 칸 너비·모양"><i class="bi bi-person-vcard"></i> 프로필</button></span></span>
             <button onclick="openImageModal(ctx.table&&ctx.table.anchor)" title="본문의 커서 위치, 또는 선택한 표 칸에 이미지 삽입"><i class="bi bi-image"></i> 이미지</button>
             <button onclick="openLinkModal()"><i class="bi bi-link-45deg"></i> 링크</button>
         </div>
@@ -330,7 +350,7 @@
                 <button onclick="tblOp('eqHeight')" title="행 높이를 모두 같게 — 가장 높은 행에 맞춤 (여러 칸을 드래그했으면 그 행들만)">높이 같게</button>
                 <button onclick="tblOp('fit')" id="fitBtn" title="화면 너비가 바뀌어도 표의 비율을 유지하고, 글씨·여백·이미지도 같은 비율로 줄이거나 늘림">비율 고정</button>
             </div>
-            <div class="hint" data-ctx="table">숫자만 쓰면 px, 비우고 적용하면 자동 · 너비/높이 같게는 여러 칸을 드래그하면 그 열·행만, 한 칸만 고르면 표 전체 · 여러 칸을 드래그하면 글씨/색/크기/정렬 버튼이 선택한 칸 전체에 적용됩니다</div>
+            <div class="hint" data-ctx="table">숫자만 쓰면 px, 비우고 적용하면 자동 · 너비/높이 같게는 여러 칸을 드래그하면 그 열·행만, 한 칸만 고르면 표 전체 · 여러 칸을 드래그하면 글씨/색/크기/정렬 버튼이 선택한 칸 전체에 적용됩니다 · 휴대폰: 칸을 누른 뒤 다른 칸을 두 번 톡톡 (또는 두 번 누르고 끌기)</div>
             <div class="btn-group" data-ctx="img">
                 <span class="label"><i class="bi bi-image"></i> 이미지 크기</span>
                 <button onclick="imgOp('25%')">25%</button>
@@ -423,9 +443,15 @@
             <input id="cbName" maxlength="20" placeholder="이름">
             <label class="cb-lbl" id="cbPwLbl">방 비밀번호 (선택 — 비워 두면 링크만으로 들어올 수 있어요)</label>
             <input id="cbPw" type="password" maxlength="40" placeholder="비밀번호" autocomplete="new-password" onkeydown="if(event.key==='Enter'){event.preventDefault();collabMain()}">
+            <div id="cbCodeBox">
+                <label class="cb-lbl">참여 코드로 들어가기</label>
+                <div class="cb-link"><input id="cbCode" maxlength="12" placeholder="예: ABCDE-FGHJK" autocomplete="off" autocapitalize="characters" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();cbJoinCode()}"><button type="button" onclick="cbJoinCode()">참여</button></div>
+            </div>
             <small id="cbIntro">방을 만들면 공유 링크가 생깁니다. 링크를 받은 사람이 열면 같은 문서를 함께 고칠 수 있습니다.<br>누가 고치고 있는 칸(섹션·상단 표 등)은 다른 사람에게 잠깁니다. 서버에 문서를 저장하지 않고 브라우저끼리 직접(암호화) 주고받으며, 처음 연결할 때만 공개 연결 도우미(PeerJS)를 거칩니다.</small>
         </div>
         <div id="cbOn" hidden>
+            <label class="cb-lbl">참여 코드</label>
+            <div class="cb-link"><input id="cbCodeOut" readonly class="cb-code"><button type="button" onclick="copyCollabCode()">복사</button></div>
             <label class="cb-lbl" id="cbLinkLbl">공유 링크</label>
             <div class="cb-link"><input id="cbLink" readonly><button type="button" onclick="copyCollabLink()">복사</button></div>
             <label class="cb-lbl">참여자</label>
@@ -757,6 +783,32 @@
             let ft=0;const later=()=>{clearTimeout(ft);ft=setTimeout(()=>composing?later():mark(),300);};
             if(document.fonts){document.fonts.ready.then(mark);document.fonts.addEventListener('loadingdone',later);}   // 아이콘 글꼴이 늦게 불러와져 버튼 너비가 바뀌는 경우
             new ResizeObserver(()=>{if(tb.clientWidth!==lastW){lastW=tb.clientWidth;mark();}}).observe(tb);
+        }
+        /* 상단바 높이가 바뀌면(표·이미지·링크 도구줄이 나타나거나 사라질 때) 그만큼 본문이 밀리므로
+           스크롤을 같이 옮겨 보던 자리·입력 중인 줄이 내려가지 않게 */
+        {
+            const tb=$('toolbar');let lastH=tb.offsetHeight;
+            new ResizeObserver(()=>{const h=tb.offsetHeight,d=h-lastH;lastH=h;if(d&&window.scrollY>0) window.scrollBy(0,d);}).observe(tb);
+        }
+        /* 휴대폰: 입력 중인 줄이 키보드 뒤나 상단바 밑으로 숨지 않게 화면을 맞춤 */
+        function keepCaretVisible(){
+            const vv=window.visualViewport;
+            if(!vv||!isEdit||!matchMedia('(pointer:coarse)').matches) return;
+            const sel=getSelection();if(!sel.rangeCount||!wiki.contains(sel.focusNode)) return;
+            const r=sel.getRangeAt(0).cloneRange();r.collapse(false);
+            let rc=r.getClientRects()[0];
+            if(!rc||!rc.height){const n=sel.focusNode,el=n.nodeType===1?n:n.parentElement;rc=el&&el.getBoundingClientRect();}
+            if(!rc) return;
+            const ct=$('ctxTools'),cover=Math.max($('toolbar').getBoundingClientRect().bottom,ct.offsetParent?ct.getBoundingClientRect().bottom:0);   // 상단바 + 표·이미지 도구줄이 덮는 곳
+            const top=Math.max(vv.offsetTop,cover)+8,bottom=vv.offsetTop+vv.height-8;
+            if(bottom-top<rc.height+16) return;
+            if(rc.bottom>bottom) window.scrollBy(0,rc.bottom-bottom+24);
+            else if(rc.top<top) window.scrollBy(0,rc.top-top-24);
+        }
+        {
+            let kq=0;const q=()=>{cancelAnimationFrame(kq);kq=requestAnimationFrame(keepCaretVisible);};
+            wiki.addEventListener('input',q);
+            if(window.visualViewport) visualViewport.addEventListener('resize',()=>setTimeout(keepCaretVisible,60));   // 키보드가 올라올 때
         }
         // 색 창을 닫을 때 색이 바뀌었으면 바로 적용 (따로 적용 버튼을 누르지 않아도). Esc는 취소
         function closePicker(cancel){
@@ -1302,6 +1354,22 @@
             const el=makeFold();
             el.lastElementChild.innerHTML='<p contenteditable="true">접을 내용을 입력하세요</p>';
             insertBlock(el,true);
+        }
+        // 표 버튼: 기본 표 / 프로필 고르기
+        function toggleTblMenu(show){const m=$('tblMenu');m.hidden=show===undefined?!m.hidden:!show;}
+        function pickTable(kind){toggleTblMenu(false);kind==='prof'?addProfileTable():addTable();}
+        document.addEventListener('pointerdown',e=>{if(!e.target.closest('.tb-menu')) toggleTblMenu(false);});
+        document.addEventListener('keydown',e=>{if(e.key==='Escape') toggleTblMenu(false);});
+        // 상단 프로필 표와 같은 크기·구성의 표 (제목 · 이미지 · 설명 · 항목 4줄)
+        function addProfileTable(){
+            const P=t=>'<p contenteditable="true">'+t+'</p>';
+            const t=addBlock('table','<colgroup><col><col></colgroup><tbody>'
+                +'<tr><th colspan="2">'+P('제목')+'</th></tr>'
+                +'<tr><td colspan="2" class="img-cell">'+P('<br>')+'</td></tr>'
+                +'<tr><td colspan="2">'+P('설명')+'</td></tr>'
+                +['항목','항목','항목','항목'].map(x=>'<tr><th>'+P(x)+'</th><td>'+P('내용')+'</td></tr>').join('')
+                +'</tbody>');
+            t.classList.add('wk-prof');
         }
         const addTable=()=>{const t=addBlock('table','<tbody><tr><th><p contenteditable="true">항목</p></th><td><p contenteditable="true">값</p></td></tr></tbody>');if(t.isConnected) setFit(t,true);};
 
@@ -2846,17 +2914,28 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                 p.on('error',e=>{clearTimeout(t);rej(e);});
             });
         }
+        // 함께 편집 중에는 화면이 꺼지지 않게 (휴대폰 화면이 꺼지면 연결이 멈춤)
+        function cbWake(on){
+            if(!on){try{collab.wake&&collab.wake.release();}catch(e){}collab.wake=null;return;}
+            if(collab.wake||!navigator.wakeLock||document.visibilityState!=='visible') return;
+            navigator.wakeLock.request('screen').then(w=>{if(!collab.on){w.release();return;}collab.wake=w;w.addEventListener('release',()=>{if(collab.wake===w) collab.wake=null;});}).catch(()=>{});
+        }
+        document.addEventListener('visibilitychange',()=>{
+            if(document.visibilityState!=='visible'||!collab.on) return;
+            cbWake(true);
+            if(collab.host&&collab.peer&&!collab.peer.destroyed&&collab.peer.disconnected) try{collab.peer.reconnect();}catch(e){}
+        });
         function cbBegin(){
-            collab.on=true;collab.known=cbSnapshot().units;collab.order=cbSnapshot().order.join('|');collab.undo=[];collab.redo=[];
+            collab.on=true;cbWake(true);collab.known=cbSnapshot().units;collab.order=cbSnapshot().order.join('|');collab.undo=[];collab.redo=[];
             cbObserver.observe(wiki,{subtree:true,childList:true,characterData:true,attributes:true});
             cbUpdateUI();
         }
         function cbEnd(msg){
-            const was=collab.on;clearInterval(collab.beat);
+            const was=collab.on;clearInterval(collab.beat);clearInterval(collab.hostWatch);cbWake(false);
             collab.on=false;cbObserver.disconnect();
             try{collab.conns.forEach(c=>c.close());collab.hostConn&&collab.hostConn.close();}catch(e){}
             try{collab.peer&&collab.peer.destroy();}catch(e){}
-            Object.assign(collab,{host:false,pw:'',banned:[],cids:{},seen:{},peer:null,conns:new Map(),hostConn:null,peers:{},locks:{},myUnit:null,undo:[],redo:[]});
+            Object.assign(collab,{host:false,pw:'',banned:[],cids:{},seen:{},fails:[],peer:null,conns:new Map(),hostConn:null,peers:{},locks:{},myUnit:null,undo:[],redo:[]});
             cbRenderLocks();cbUpdateUI();
             if(was&&location.hash.startsWith('#join=')) history.replaceState(null,'',location.pathname+location.search);   // 입장 실패 때는 링크를 남겨 다시 시도할 수 있게
             if(was&&msg) alert(msg);
@@ -2866,9 +2945,22 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
         async function cbHost(){
             const name=cbName();$('cbStatus').textContent='방을 만드는 중…';
             try{
-                collab.room='wkedit-'+rid(12);collab.key=rid(16);collab.pw=$('cbPw').value;collab.banned=[];collab.cids={};
-                const p=await cbStartPeer(collab.room);
+                collab.pw=$('cbPw').value;collab.banned=[];collab.cids={};
+                /* 참여 코드 10자리 = 앞 5자리(방 이름) + 뒤 5자리(입장 열쇠)
+                   연결 도우미 서버에는 방 이름만 전달되고, 열쇠는 참여자와 방장 사이의 암호화된 직접 연결로만 확인 */
+                let p=null;
+                for(let i=0;i<4&&!p;i++){
+                    collab.room='wkedit-'+cbNewCode(5);collab.key=cbNewCode(5);   // 방 이름이 이미 쓰이면 새로 뽑음
+                    try{p=await cbStartPeer(collab.room);}catch(e){if(e&&e.type==='unavailable-id') continue;throw e;}
+                }
+                if(!p) throw new Error('방 코드를 만들지 못했습니다. 다시 시도하세요');
                 Object.assign(collab,{peer:p,host:true,me:p.id,peers:{[p.id]:{name,color:CB_COLORS[0]}},locks:{}});
+                cbWireHost(p);
+                cbBegin();cbBeat();cbHostWatch();$('cbStatus').textContent='';
+            }catch(e){cbEnd();$('cbStatus').textContent='방을 만들지 못했습니다: '+(e&&e.type==='network'?'인터넷 연결을 확인하세요':(e.message||e));}
+        }
+        // 방장: 새 연결 받기
+        function cbWireHost(p){
                 p.on('connection',c=>{
                     let ok=false;
                     const t=setTimeout(()=>{if(!ok) c.close();},10000);
@@ -2876,7 +2968,14 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                         if(!m||typeof m!=='object') return;
                         collab.seen[c.peer]=Date.now();
                         if(!ok){
-                            if(m.t!=='hello'||m.key!==collab.key){c.close();return;}   // 링크의 열쇠가 맞아야 입장
+                            if(m.t!=='hello'){c.close();return;}
+                            if(m.key!==collab.key){   // 링크·코드의 열쇠가 맞아야 입장
+                                clearTimeout(t);
+                                // 마구 넣어 보기 방지: 틀릴 때마다 잠시 뒤 거절, 10초 안에 5번 넘게 틀리면 한동안 바로 끊음
+                                const now=Date.now();collab.fails=(collab.fails||[]).filter(x=>now-x<10000);collab.fails.push(now);
+                                if(collab.fails.length>5){c.close();return;}
+                                setTimeout(()=>{try{c.send({t:'deny',why:'key'});}catch(e){}setTimeout(()=>c.close(),300);},1200);return;
+                            }
                             if(m.cid&&collab.banned.includes(m.cid)){clearTimeout(t);try{c.send({t:'deny',why:'ban'});}catch(e){}setTimeout(()=>c.close(),300);return;}   // 내보낸 사람은 다시 못 들어옴
                             if(collab.pw&&m.pw!==collab.pw){   // 비밀번호를 정한 방은 비밀번호도 맞아야 입장 (마구 넣어 보기 어렵도록 잠시 뒤 거절)
                                 clearTimeout(t);setTimeout(()=>{try{c.send({t:'deny',why:'pw'});}catch(e){}setTimeout(()=>c.close(),300);},1200);return;
@@ -2902,17 +3001,34 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                     c.on('close',()=>cbDrop(c.peer));
                     c.on('error',()=>cbDrop(c.peer));
                 });
-                p.on('disconnected',()=>{try{p.reconnect();}catch(e){}});
-                cbBegin();cbBeat();$('cbStatus').textContent='';
-            }catch(e){cbEnd();$('cbStatus').textContent='방을 만들지 못했습니다: '+(e&&e.type==='network'?'인터넷 연결을 확인하세요':(e.message||e));}
+                p.on('disconnected',()=>{if(!p.destroyed) try{p.reconnect();}catch(e){}});
+                p.on('error',()=>{});   // 연결 도우미 오류는 아래 감시가 다시 연결
         }
+        /* 방장 방 유지: 방장이 [방 닫기]를 누르기 전에는 방이 닫히지 않게
+           - 연결 도우미(PeerJS)와 끊기면 5초마다 다시 접속 (이미 들어온 참여자와의 직접 연결은 그대로 유지)
+           - 연결 도우미 쪽 방 정보가 사라졌으면 같은 코드로 방을 다시 엶 → 새 참여자도 같은 링크·코드로 계속 들어올 수 있음 */
+        function cbHostWatch(){
+            clearInterval(collab.hostWatch);
+            collab.hostWatch=setInterval(async()=>{
+                if(!collab.on||!collab.host){clearInterval(collab.hostWatch);return;}
+                const p=collab.peer;if(collab.reviving) return;
+                if(p&&!p.destroyed){if(p.disconnected) try{p.reconnect();}catch(e){}return;}
+                collab.reviving=true;
+                try{const np=await cbStartPeer(collab.room);if(collab.on&&collab.host){collab.peer=np;cbWireHost(np);}else np.destroy();}catch(e){}
+                collab.reviving=false;
+            },5000);
+        }
+        // 참여 코드: 헷갈리는 글자(0·O·1·I·L) 없이. 화면에는 '방 이름 5자리-열쇠 5자리'
+        const CB_CODE_CH='abcdefghjkmnpqrstuvwxyz23456789';
+        function cbNewCode(n){const a=crypto.getRandomValues(new Uint8Array(n));return [...a].map(x=>CB_CODE_CH[x%CB_CODE_CH.length]).join('');}
+        function cbCodeText(){const r=(collab.room||'').replace(/^wkedit-/,''),k=collab.key||'';return r.length===5&&k.length===5?(r+'-'+k).toUpperCase():'';}
         // 링크로 참여
-        async function cbJoin(room,key,pw){
-            const name=cbName();$('cbStatus').textContent='연결하는 중…';
+        async function cbJoin(room,key,pw,silent){
+            const name=cbName();if(!silent) $('cbStatus').textContent='연결하는 중…';
             try{
                 const p=await cbStartPeer();
                 const c=p.connect(room,{reliable:true});
-                Object.assign(collab,{peer:p,host:false,hostConn:c,me:p.id,room,key});
+                Object.assign(collab,{peer:p,host:false,hostConn:c,me:p.id,room,key,joinArgs:{room,key,pw}});
                 let welcomed=false;
                 await new Promise((res,rej)=>{
                     const t=setTimeout(()=>rej(new Error('방에 연결하지 못했습니다. 링크가 맞는지, 방장이 방을 열어 두었는지 확인하세요')),20000);
@@ -2922,7 +3038,7 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                         if(!m||typeof m!=='object') return;
                         collab.seen.host=Date.now();
                         if(m.t==='ping'){try{c.send({t:'pong'});}catch(e){}return;}
-                        if(m.t==='deny'){clearTimeout(t);welcomed=null;rej(new Error(m.why==='ban'?'방장이 이 방에서 내보내서 다시 들어갈 수 없습니다':'비밀번호가 맞지 않습니다'));return;}
+                        if(m.t==='deny'){clearTimeout(t);welcomed=null;const er=new Error(m.why==='ban'?'방장이 이 방에서 내보내서 다시 들어갈 수 없습니다':m.why==='key'?'참여 코드(또는 링크)가 맞지 않습니다':pw?'비밀번호가 맞지 않습니다':'비밀번호가 있는 방입니다. 비밀번호를 입력하세요');er.stop=true;rej(er);return;}
                         if(m.t==='welcome'){
                             clearTimeout(t);welcomed=true;
                             flushHistory();
@@ -2944,12 +3060,32 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                     });
                     c.on('close',()=>{
                         if(welcomed===null) return;
-                        if(!welcomed){clearTimeout(t);rej(new Error('입장이 거부되었습니다. 링크 전체(뒤쪽 열쇠 포함)를 그대로 받았는지 확인하세요'));return;}
-                        cbEnd('방장과의 연결이 끊겨 함께 편집이 끝났습니다. 문서는 지금 화면에 그대로 남아 있습니다.');
+                        if(!welcomed){clearTimeout(t);const er=new Error('입장이 거부되었습니다. 링크나 코드를 그대로 받았는지 확인하세요');er.stop=true;rej(er);return;}
+                        cbLost();
                     });
                 });
-                $('cbStatus').textContent='';closeModal();toast('함께 편집에 참여했습니다');
-            }catch(e){cbEnd();openModal('collabM');cbUpdateUI();$('cbStatus').textContent=e.message||String(e);if(pw!==undefined) $('cbPw').select();}
+                if(silent){toast('방장과 다시 연결되었습니다');return true;}
+                $('cbStatus').textContent='';closeModal();toast('함께 편집에 참여했습니다');return true;
+            }catch(e){
+                cbEnd();if(silent) return e&&e.stop?'stop':false;
+                openModal('collabM');cbUpdateUI();$('cbStatus').textContent=e.message||String(e);if(e&&e.stop&&/비밀번호/.test(e.message)) $('cbPw').select();return false;
+            }
+        }
+        // 참여자: 방장과 연결이 끊기면 바로 끝내지 않고 40초 동안 다시 연결 시도 (방장 쪽 인터넷이 잠깐 끊긴 경우)
+        function cbLost(){
+            if(!collab.on||collab.host) return;
+            const a=collab.joinArgs,msg='방장과의 연결이 끊겨 함께 편집이 끝났습니다. 문서는 지금 화면에 그대로 남아 있습니다.';
+            cbEnd();if(!a) return alert(msg);
+            toast('방장과 연결이 끊겨 다시 연결하는 중…');
+            let n=0;
+            const again=async()=>{
+                if(collab.on) return;   // 그 사이 직접 다른 방에 들어갔으면 중단
+                const r=await cbJoin(a.room,a.key,a.pw,true);
+                if(r===true) return;
+                if(r!=='stop'&&++n<8) return setTimeout(again,5000);
+                alert(msg);
+            };
+            setTimeout(again,1500);
         }
         // 방장: 나간 참여자 정리 (연결 끊김·창 닫기·응답 없음 모두)
         function cbDrop(id){
@@ -2971,7 +3107,7 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
                 if(collab.host){
                     cbSend({t:'ping'});
                     [...collab.conns.keys()].forEach(id=>{if(t-(collab.seen[id]||t)>20000) cbDrop(id);});
-                }else if(t-(collab.seen.host||t)>20000) cbEnd('방장과의 연결이 끊겨 함께 편집이 끝났습니다. 문서는 지금 화면에 그대로 남아 있습니다.');
+                }else if(t-(collab.seen.host||t)>20000) cbLost();
             },5000);
         }
         // 창을 닫을 때: 방장은 방 닫기, 참여자는 나간다고 알림 (모바일은 pagehide만 오는 경우가 있어 둘 다)
@@ -2989,9 +3125,21 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
         }
         // 비밀번호는 링크에 넣지 않음 — 비밀번호가 있는 방이라는 표시(&p=1)만
         function cbLink(){return location.href.split('#')[0]+'#join='+collab.room+'&k='+collab.key+(collab.pw?'&p=1':'');}
+        // 코드로 참여
+        function cbJoinCode(){
+            const code=$('cbCode').value.toLowerCase().replace(/[^a-z0-9]/g,'');
+            if(code.length!==10||[...code].some(ch=>!CB_CODE_CH.includes(ch))){$('cbStatus').textContent='참여 코드 10자리를 확인하세요 (예: ABCDE-FGHJK)';$('cbCode').focus();return;}
+            if(!confirm('지금 편집기의 문서를 함께 편집하는 문서로 바꿉니다. 계속할까요?\n(지금 문서를 남기려면 취소 후 [저장]을 먼저 누르세요)')) return;
+            cbJoin('wkedit-'+code.slice(0,5),code.slice(5),$('cbPw').value);
+        }
+        function copyCollabCode(){
+            const v=$('cbCodeOut').value;
+            const done=()=>toast('참여 코드를 복사했습니다'),fallback=()=>{const i=$('cbCodeOut');i.select();document.execCommand('copy');done();};
+            (navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).then(done,fallback);
+        }
         // 링크 복사: 받는 사람에게 '위키 투게더'로 보이도록 제목 줄과 함께
         function copyCollabLink(){
-            const v='[위키 투게더] 함께 편집 초대\n'+$('cbLink').value;
+            const v='[위키 투게더] 함께 편집 초대\n'+$('cbLink').value+'\n참여 코드: '+$('cbCodeOut').value;
             const fallback=()=>{const ta=document.createElement('textarea');ta.value=v;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('링크를 복사했습니다');};
             (navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).then(()=>toast('링크를 복사했습니다'),fallback);
         }
@@ -3001,12 +3149,13 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
             $('cbOff').hidden=on;$('cbOn').hidden=!on;
             const join=!on&&location.hash.startsWith('#join='),needPw=join&&/&p=1/.test(location.hash);
             $('cbMain').textContent=on?(collab.host?'방 닫기':'나가기'):(join?'참여하기':'방 만들기');
-            $('cbPwLbl').textContent=join?'방 비밀번호 — 방장에게 따로 받은 비밀번호':'방 비밀번호 (선택 — 비워 두면 링크만으로 들어올 수 있어요)';
+            $('cbPwLbl').textContent=join?'방 비밀번호 — 방장에게 따로 받은 비밀번호':'방 비밀번호 (선택) — 방을 만들 때 정하면 링크·코드와 함께 비밀번호도 있어야 들어올 수 있어요. 비밀번호가 있는 방에 코드로 들어갈 때도 여기에 입력';
+            $('cbCodeBox').hidden=join;
             $('cbPwLbl').hidden=$('cbPw').hidden=join&&!needPw;
             $('cbIntro').hidden=join;
             if(on){
-                $('cbLinkLbl').textContent=collab.host&&collab.pw?'공유 링크 — 비밀번호는 링크에 들어 있지 않으니 따로 알려 주세요':collab.host?'공유 링크 — 이 링크를 가진 사람은 누구나 들어올 수 있어요':'공유 링크';
-                $('cbLink').value=cbLink();
+                $('cbLinkLbl').textContent=collab.host&&collab.pw?'공유 링크 — 비밀번호는 링크·코드에 들어 있지 않으니 따로 알려 주세요':collab.host?'공유 링크 — 이 링크나 코드를 가진 사람은 누구나 들어올 수 있어요':'공유 링크';
+                $('cbLink').value=cbLink();$('cbCodeOut').value=cbCodeText();
                 $('cbPeers').replaceChildren(...Object.entries(collab.peers).map(([id,p])=>{const s=document.createElement('span'),i=document.createElement('i');i.style.background=p.color;s.append(i,p.name+(id===collab.me?' (나)':'')+(collab.host&&id===collab.me||!collab.host&&id===collab.room?' · 방장':''));
                     if(collab.host&&id!==collab.me){const x=document.createElement('button');x.type='button';x.title='내보내기';x.innerHTML='<i class="bi bi-x-lg"></i>';x.onclick=()=>cbKick(id);s.append(x);}
                     return s;}));
@@ -3300,6 +3449,46 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
             drag={table,anchor:cell,multi:false};
             selectCells(table,cell,cell);
         });
+        /* 휴대폰 여러 칸 선택: 손가락 끌기는 화면 스크롤이 되므로 '두 번 톡톡'으로
+           - 칸을 누른 뒤, 다른 칸을 빠르게 두 번 누르면 → 처음 칸부터 그 칸까지 선택
+           - 칸을 빠르게 두 번 누르고 손을 떼지 않은 채 끌면 → 끈 만큼 선택 */
+        {
+            let pend=null,last=null,tg=null;
+            const cellAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest&&el.closest('td,th');};
+            wiki.addEventListener('touchstart',e=>{
+                tg=null;
+                if(!isEdit||e.touches.length!==1){pend=last=null;return;}
+                const t=e.touches[0],cell=e.target.closest&&e.target.closest('td,th'),table=cell&&cell.closest('table');
+                if(!cell||!wiki.contains(table)){pend=last=null;return;}
+                if(last&&Date.now()-last.t<400&&last.table===table&&Math.hypot(t.clientX-last.x,t.clientY-last.y)<150){
+                    e.preventDefault();   // 확대·단어 선택·스크롤 대신 칸 선택
+                    tg={table,cell,anchor:last.prev,moved:false};last=pend=null;
+                    getSelection().removeAllRanges();if(document.activeElement&&wiki.contains(document.activeElement)) document.activeElement.blur();
+                    return;
+                }
+                // 이 누름 전에 선택돼 있던 칸 (첫 누름이 선택을 바꾸기 전에 기억)
+                pend={table,x:t.clientX,y:t.clientY,prev:ctx.table&&ctx.table.table===table&&ctx.table.anchor.isConnected?ctx.table.anchor:null};
+            },{passive:false});
+            wiki.addEventListener('touchmove',e=>{
+                const t=e.touches[0];
+                if(!tg){if(pend&&Math.hypot(t.clientX-pend.x,t.clientY-pend.y)>10) pend=null;return;}
+                e.preventDefault();
+                const cell=cellAt(t.clientX,t.clientY);
+                if(!cell||cell.closest('table')!==tg.table) return;
+                if(cell!==tg.cell) tg.moved=true;
+                if(tg.moved) selectCells(tg.table,tg.cell,cell);
+            },{passive:false});
+            wiki.addEventListener('touchend',e=>{
+                if(tg){
+                    e.preventDefault();
+                    if(!tg.moved) selectCells(tg.table,tg.anchor&&tg.anchor!==tg.cell?tg.anchor:tg.cell,tg.cell);
+                    getSelection().removeAllRanges();tg=null;return;
+                }
+                if(pend) last={t:Date.now(),table:pend.table,x:pend.x,y:pend.y,prev:pend.prev};
+                pend=null;
+            },{passive:false});
+            wiki.addEventListener('touchcancel',()=>{tg=pend=null;});
+        }
         // 표 칸 끌기 상태 정리 (마우스를 창 밖·알림창 위에서 놓쳐 끝 신호가 빠져도 본문 선택·화살표가 막히지 않게)
         const endCellDrag=()=>{drag=null;wiki.classList.remove('cell-dragging');};
         wiki.addEventListener('mouseover',e=>{
@@ -3366,7 +3555,11 @@ document.querySelectorAll('.wiki h3.sec').forEach(function(h){h.addEventListener
             if(!footnotesInSync()) renumberFootnotes();
         }
         // 조합 중의 입력은 건드리지 않음 (일부 브라우저는 조합 중에도 isComposing 을 false 로 보내므로 composing 으로도 확인)
-        wiki.addEventListener('input',e=>{if(e.isComposing||composing) return;wrapStray();afterTyping(e.target);});
+        wiki.addEventListener('input',e=>{
+            // 제목·번호 칸을 다 지우면 남는 줄바꿈(<br>)을 없애 빈 칸 표시가 되도록
+            const sp=e.target.closest&&e.target.closest('span[contenteditable="true"]');
+            if(sp&&!sp.textContent&&!sp.querySelector('img')&&sp.innerHTML) sp.innerHTML='';
+            if(e.isComposing||composing) return;wrapStray();afterTyping(e.target);});
         // 본문 칸에 문단 밖 글자가 생기면(블록 사이에서 바로 입력 등) 문단으로 감쌈
         function wrapStray(){
             const s=getSelection();if(!s.rangeCount) return;
